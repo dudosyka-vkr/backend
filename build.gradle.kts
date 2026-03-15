@@ -56,6 +56,13 @@ dependencies {
     // Testing
     testImplementation(kotlin("test"))
     testImplementation("io.ktor:ktor-server-test-host:$ktor_version")
+    testImplementation("io.ktor:ktor-client-content-negotiation:$ktor_version")
+    testImplementation("org.testcontainers:testcontainers:1.20.4")
+    testImplementation("org.testcontainers:postgresql:1.20.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("io.insert-koin:koin-test:$koin_version")
+    testImplementation("io.insert-koin:koin-test-junit5:$koin_version")
+    testImplementation("io.mockk:mockk:1.13.14")
 }
 
 tasks.test {

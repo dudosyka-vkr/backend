@@ -10,7 +10,8 @@ import io.ktor.server.routing.*
 import org.eyetracker.test.dto.ErrorResponse
 import org.eyetracker.test.service.TestResult
 import org.eyetracker.test.service.TestService
-import io.ktor.utils.io.jvm.javaio.*
+import io.ktor.utils.io.*
+import java.io.ByteArrayInputStream
 import java.io.InputStream
 
 private fun RoutingCall.userId(): Int =
@@ -37,9 +38,9 @@ fun Route.testRoutes(testService: TestService) {
                 val userId = call.userId()
                 val multipart = call.receiveMultipart()
                 var name: String? = null
-                var coverStream: InputStream? = null
+                var coverBytes: ByteArray? = null
                 var coverExtension = "jpg"
-                val imageStreams = mutableListOf<Pair<InputStream, String>>()
+                val imageEntries = mutableListOf<Pair<ByteArray, String>>()
 
                 multipart.forEachPart { part ->
                     when (part) {
@@ -50,26 +51,31 @@ fun Route.testRoutes(testService: TestService) {
                             val ext = part.originalFileName
                                 ?.substringAfterLast('.', "jpg")
                                 ?.lowercase() ?: "jpg"
+                            val bytes = part.provider().toByteArray()
                             when (part.name) {
                                 "cover" -> {
-                                    coverStream = part.provider().toInputStream()
+                                    coverBytes = bytes
                                     coverExtension = ext
                                 }
                                 "images" -> {
-                                    imageStreams.add(part.provider().toInputStream() to ext)
+                                    imageEntries.add(bytes to ext)
                                 }
                             }
                         }
                         else -> {}
                     }
+                    part.dispose()
                 }
 
-                if (name == null || coverStream == null) {
+                if (name == null || coverBytes == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Name and cover are required"))
                     return@post
                 }
 
-                when (val result = testService.create(name!!, coverStream!!, coverExtension, imageStreams, userId)) {
+                val coverStream: InputStream = ByteArrayInputStream(coverBytes!!)
+                val imageStreams = imageEntries.map { (bytes, ext) -> ByteArrayInputStream(bytes) as InputStream to ext }
+
+                when (val result = testService.create(name!!, coverStream, coverExtension, imageStreams, userId)) {
                     is TestResult.Success -> call.respond(HttpStatusCode.Created, result.response)
                     is TestResult.Error -> call.respond(HttpStatusCode.fromValue(result.status), ErrorResponse(result.message))
                 }

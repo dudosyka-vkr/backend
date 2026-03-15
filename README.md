@@ -27,6 +27,26 @@ make local
 | `make deploy-stop` | Остановить все контейнеры |
 | `make build` | Собрать fat jar |
 | `make clean` | Очистить артефакты сборки |
+| `make test` | Запустить все тесты |
+| `make test-unit` | Только unit-тесты |
+| `make test-integration` | Только интеграционные тесты |
+
+## Тестирование
+
+Требуется Docker (для Testcontainers — поднимает PostgreSQL автоматически).
+
+```bash
+# Запустить все тесты (98 тестов)
+make test
+
+# Только unit-тесты (сервисы + DAO)
+make test-unit
+
+# Только интеграционные тесты (HTTP-эндпоинты)
+make test-integration
+```
+
+Тесты используют Testcontainers с реальным PostgreSQL, MockK для моков в unit-тестах сервисов, и Ktor `testApplication` для интеграционных тестов.
 
 ## Конфигурация
 

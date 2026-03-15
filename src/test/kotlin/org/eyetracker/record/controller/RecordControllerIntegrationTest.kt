@@ -36,7 +36,7 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
         assertTrue(body["id"]!!.jsonPrimitive.int > 0)
         assertEquals(testId, body["testId"]!!.jsonPrimitive.int)
-        assertEquals("recorder@test.com", body["userLogin"]!!.jsonPrimitive.content)
+        assertEquals(TestFixtures.ADMIN_LOGIN, body["userLogin"]!!.jsonPrimitive.content)
         assertEquals(300000, body["durationMs"]!!.jsonPrimitive.long)
         assertEquals(2, body["items"]!!.jsonArray.size)
     }
@@ -45,18 +45,9 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
     fun `create record without auth returns 401`() = testApp { client ->
         val response = client.post("/records") {
             contentType(ContentType.Application.Json)
-            setBody("""{"testId":1,"userLogin":"u","startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[]}""")
+            setBody("""{"testId":1,"startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[]}""")
         }
         assertEquals(HttpStatusCode.Unauthorized, response.status)
-    }
-
-    @Test
-    fun `create record with blank userLogin returns 400`() = testApp { client ->
-        val (token, testData) = setupTestWithImages(client)
-        val (testId, imageIds) = testData
-
-        val response = createRecordViaApi(client, token, testId, imageIds, userLogin = "   ")
-        assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
     @Test
@@ -67,7 +58,7 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val response = client.post("/records") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
-            setBody("""{"testId":$testId,"userLogin":"u@test.com","startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[]}""")
+            setBody("""{"testId":$testId,"startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[]}""")
         }
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
@@ -80,7 +71,7 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val response = client.post("/records") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
-            setBody("""{"testId":$testId,"userLogin":"u@test.com","startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":-1,"items":[{"imageId":${imageIds[0]},"metrics":{"placeholderMetric":1.0}}]}""")
+            setBody("""{"testId":$testId,"startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":-1,"items":[{"imageId":${imageIds[0]},"metrics":{"placeholderMetric":1.0}}]}""")
         }
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
@@ -91,7 +82,7 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val response = client.post("/records") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
-            setBody("""{"testId":99999,"userLogin":"u@test.com","startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[{"imageId":1,"metrics":{"placeholderMetric":1.0}}]}""")
+            setBody("""{"testId":99999,"startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[{"imageId":1,"metrics":{"placeholderMetric":1.0}}]}""")
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -104,7 +95,7 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val response = client.post("/records") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
-            setBody("""{"testId":$testId,"userLogin":"u@test.com","startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[{"imageId":99999,"metrics":{"placeholderMetric":1.0}}]}""")
+            setBody("""{"testId":$testId,"startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[{"imageId":99999,"metrics":{"placeholderMetric":1.0}}]}""")
         }
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
@@ -116,9 +107,9 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val (token, testData) = setupTestWithImages(client)
         val (testId, imageIds) = testData
 
-        createRecordViaApi(client, token, testId, imageIds, userLogin = "a@test.com")
-        createRecordViaApi(client, token, testId, imageIds, userLogin = "b@test.com")
-        createRecordViaApi(client, token, testId, imageIds, userLogin = "c@test.com")
+        createRecordViaApi(client, token, testId, imageIds)
+        createRecordViaApi(client, token, testId, imageIds)
+        createRecordViaApi(client, token, testId, imageIds)
 
         val response = client.get("/records?page=1&pageSize=2") {
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
@@ -137,10 +128,9 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val (token, testData) = setupTestWithImages(client)
         val (testId, imageIds) = testData
 
-        createRecordViaApi(client, token, testId, imageIds, userLogin = "alice@test.com")
-        createRecordViaApi(client, token, testId, imageIds, userLogin = "bob@test.com")
+        createRecordViaApi(client, token, testId, imageIds)
 
-        val response = client.get("/records?userLogin=alice@test.com") {
+        val response = client.get("/records?userLogin=${TestFixtures.ADMIN_LOGIN}") {
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -148,6 +138,23 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
         assertEquals(1, body["items"]!!.jsonArray.size)
         assertEquals(1, body["total"]!!.jsonPrimitive.int)
+    }
+
+    @Test
+    fun `list records filtered by userLogin returns empty for non-matching`() = testApp { client ->
+        val (token, testData) = setupTestWithImages(client)
+        val (testId, imageIds) = testData
+
+        createRecordViaApi(client, token, testId, imageIds)
+
+        val response = client.get("/records?userLogin=nonexistent@test.com") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(0, body["items"]!!.jsonArray.size)
+        assertEquals(0, body["total"]!!.jsonPrimitive.int)
     }
 
     @Test

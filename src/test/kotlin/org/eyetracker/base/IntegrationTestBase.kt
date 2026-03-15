@@ -184,13 +184,12 @@ abstract class IntegrationTestBase {
         token: String,
         testId: Int,
         imageIds: List<Int>,
-        userLogin: String = "recorder@test.com",
     ): HttpResponse {
         val itemsJson = imageIds.joinToString(",") { """{"imageId":$it,"metrics":{"placeholderMetric":1.5}}""" }
         return client.post("/records") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
-            setBody("""{"testId":$testId,"userLogin":"$userLogin","startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[$itemsJson]}""")
+            setBody("""{"testId":$testId,"startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[$itemsJson]}""")
         }
     }
 

@@ -2,9 +2,7 @@ package org.eyetracker.record.service
 
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.datetime.Clock
-import org.eyetracker.record.dao.CreateRecordItemData
 import org.eyetracker.record.dao.RecordDao
 import org.eyetracker.record.dao.RecordEntity
 import org.eyetracker.record.dao.RecordItemWithMetrics
@@ -13,7 +11,6 @@ import org.eyetracker.record.dao.RecordWithItems
 import org.eyetracker.record.dto.CreateRecordItemRequest
 import org.eyetracker.record.dto.CreateRecordRequest
 import org.eyetracker.record.dto.RecordItemMetrics
-import org.eyetracker.record.dto.RecordSummaryResponse
 import org.eyetracker.test.dao.TestDao
 import org.eyetracker.test.dao.TestEntity
 import org.eyetracker.test.dao.TestTable
@@ -61,13 +58,11 @@ class RecordServiceTest {
 
     private fun validRequest(
         testId: Int = 1,
-        userLogin: String = "user@test.com",
         items: List<CreateRecordItemRequest> = listOf(
             CreateRecordItemRequest(10, RecordItemMetrics(1.5)),
         ),
     ) = CreateRecordRequest(
         testId = testId,
-        userLogin = userLogin,
         startedAt = "2025-01-01T10:00:00Z",
         finishedAt = "2025-01-01T10:05:00Z",
         durationMs = 300000,
@@ -88,23 +83,15 @@ class RecordServiceTest {
         )
         every { recordDao.create(any(), any(), any(), any(), any(), any()) } returns rwi
 
-        val result = recordService.create(validRequest())
+        val result = recordService.create(validRequest(), "user@test.com")
         assertIs<RecordResult.Success>(result)
         assertEquals(1, result.response.id)
         assertEquals(1, result.response.items.size)
     }
 
     @Test
-    fun `create fails with blank userLogin`() {
-        val result = recordService.create(validRequest(userLogin = "   "))
-        assertIs<RecordResult.Error>(result)
-        assertEquals(400, result.status)
-        verify(exactly = 0) { recordDao.create(any(), any(), any(), any(), any(), any()) }
-    }
-
-    @Test
     fun `create fails with empty items`() {
-        val result = recordService.create(validRequest(items = emptyList()))
+        val result = recordService.create(validRequest(items = emptyList()), "user@test.com")
         assertIs<RecordResult.Error>(result)
         assertEquals(400, result.status)
     }
@@ -112,7 +99,7 @@ class RecordServiceTest {
     @Test
     fun `create fails with negative duration`() {
         val req = validRequest().copy(durationMs = -1)
-        val result = recordService.create(req)
+        val result = recordService.create(req, "user@test.com")
         assertIs<RecordResult.Error>(result)
         assertEquals(400, result.status)
     }
@@ -120,7 +107,7 @@ class RecordServiceTest {
     @Test
     fun `create fails with invalid timestamp`() {
         val req = validRequest().copy(startedAt = "not-a-timestamp")
-        val result = recordService.create(req)
+        val result = recordService.create(req, "user@test.com")
         assertIs<RecordResult.Error>(result)
         assertEquals(400, result.status)
     }
@@ -128,7 +115,7 @@ class RecordServiceTest {
     @Test
     fun `create fails when test not found`() {
         every { testDao.findById(999) } returns null
-        val result = recordService.create(validRequest(testId = 999))
+        val result = recordService.create(validRequest(testId = 999), "user@test.com")
         assertIs<RecordResult.Error>(result)
         assertEquals(404, result.status)
     }
@@ -140,7 +127,7 @@ class RecordServiceTest {
         every { testDao.findImageIdsByTestId(1) } returns listOf(10)
 
         val req = validRequest(items = listOf(CreateRecordItemRequest(999, RecordItemMetrics(1.0))))
-        val result = recordService.create(req)
+        val result = recordService.create(req, "user@test.com")
         assertIs<RecordResult.Error>(result)
         assertEquals(400, result.status)
     }

@@ -270,7 +270,6 @@ sealed class RecordResult {
 
 ### Валидация при создании
 
-- `userLogin` не может быть пустым → 400
 - `items` не может быть пустым → 400
 - `durationMs` должен быть ≥ 0 → 400
 - `startedAt` / `finishedAt` должны быть валидными ISO-8601 → 400
@@ -398,7 +397,7 @@ record_items
 
 | Метод | Путь | Аутентификация | Описание | Ответ |
 |-------|------|----------------|----------|-------|
-| POST | `/records` | JWT | Создать прохождение с результатами по изображениям | `201 RecordDetailResponse` или `400`/`404` |
+| POST | `/records` | JWT | Создать прохождение (userLogin берётся из JWT) | `201 RecordDetailResponse` или `400`/`404` |
 | GET | `/records` | JWT | Список прохождений (пагинация + фильтры) | `200 RecordListResponse` |
 | GET | `/records/{id}` | JWT | Детали прохождения с items | `200 RecordDetailResponse` или `404` |
 
@@ -446,11 +445,11 @@ Query-параметры для `GET /records`:
 
 ### Обзор
 
-152 теста, разделённых на три категории:
+151 тест, разделённых на три категории:
 
 | Категория | Количество | Подход |
 |-----------|------------|--------|
-| Unit-тесты сервисов (AuthServiceTest, TestServiceTest, RecordServiceTest) | 51 | MockK для моков DAO, без БД |
+| Unit-тесты сервисов (AuthServiceTest, TestServiceTest, RecordServiceTest) | 50 | MockK для моков DAO, без БД |
 | Тесты DAO (UserDaoTest, TestDaoTest, RecordDaoTest) | 31 | Testcontainers PostgreSQL, реальная БД |
 | Интеграционные тесты (контроллеры Auth + Test + Record) | 70 | Полное приложение Ktor + Testcontainers, реальные HTTP-запросы |
 
@@ -522,7 +521,7 @@ Docker-окружение находится в `deploy/` (на основе htt
 | `make deploy-stop` | Остановка всех контейнеров |
 | `make build` | Только сборка fat jar |
 | `make clean` | Очистка артефактов сборки + удаление jar из dist |
-| `make test` | Запуск всех тестов (152 теста, требуется Docker) |
+| `make test` | Запуск всех тестов (151 тест, требуется Docker) |
 | `make test-unit` | Только unit-тесты (сервисы + DAO) |
 | `make test-integration` | Только интеграционные тесты (контроллеры) |
 

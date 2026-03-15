@@ -2,6 +2,7 @@ package org.eyetracker.record.controller
 
 import io.ktor.http.*
 import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -10,12 +11,16 @@ import org.eyetracker.record.dto.ErrorResponse
 import org.eyetracker.record.service.RecordResult
 import org.eyetracker.record.service.RecordService
 
+private fun RoutingCall.userLogin(): String =
+    principal<JWTPrincipal>()!!.payload.getClaim("email").asString()
+
 fun Route.recordRoutes(recordService: RecordService) {
     authenticate("auth-jwt") {
         route("/records") {
             post {
                 val request = call.receive<CreateRecordRequest>()
-                when (val result = recordService.create(request)) {
+                val userLogin = call.userLogin()
+                when (val result = recordService.create(request, userLogin)) {
                     is RecordResult.Success -> call.respond(HttpStatusCode.Created, result.response)
                     is RecordResult.Error -> call.respond(
                         HttpStatusCode.fromValue(result.status), ErrorResponse(result.message),

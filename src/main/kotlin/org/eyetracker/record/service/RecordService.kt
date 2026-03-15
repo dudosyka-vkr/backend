@@ -21,10 +21,7 @@ class RecordService(
     private val recordDao: RecordDao,
     private val testDao: TestDao,
 ) {
-    fun create(request: CreateRecordRequest): RecordResult {
-        if (request.userLogin.isBlank()) {
-            return RecordResult.Error("User login is required", 400)
-        }
+    fun create(request: CreateRecordRequest, userLogin: String): RecordResult {
         if (request.items.isEmpty()) {
             return RecordResult.Error("At least one item is required", 400)
         }
@@ -53,7 +50,7 @@ class RecordService(
 
         val items = request.items.map { CreateRecordItemData(it.imageId, it.metrics) }
         val result = recordDao.create(
-            request.testId, request.userLogin, startedAt, finishedAt, request.durationMs, items,
+            request.testId, userLogin, startedAt, finishedAt, request.durationMs, items,
         )
 
         return RecordResult.Success(toDetailResponse(result))

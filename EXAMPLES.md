@@ -62,7 +62,6 @@ curl -X POST http://localhost:8080/records \
   -H "Authorization: Bearer <token>" \
   -d '{
     "testId": 1,
-    "userLogin": "student@example.com",
     "startedAt": "2025-01-15T10:00:00Z",
     "finishedAt": "2025-01-15T10:05:00Z",
     "durationMs": 300000,

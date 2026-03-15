@@ -14,7 +14,6 @@ data class CreateRecordItemRequest(
 @Serializable
 data class CreateRecordRequest(
     val testId: Int,
-    val userLogin: String,
     val startedAt: String,
     val finishedAt: String,
     val durationMs: Long,

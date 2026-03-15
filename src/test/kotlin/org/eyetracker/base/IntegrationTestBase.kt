@@ -55,7 +55,7 @@ abstract class IntegrationTestBase {
             password = postgres.password,
         )
         transaction {
-            exec("TRUNCATE test_images, tests, users RESTART IDENTITY CASCADE")
+            exec("TRUNCATE record_items, records, test_images, tests, users RESTART IDENTITY CASCADE")
         }
         // Clean upload files
         File(uploadDir).deleteRecursively()
@@ -158,6 +158,39 @@ abstract class IntegrationTestBase {
         ) {
             method = HttpMethod.Put
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+    }
+
+    fun getImageIdsFromDb(testId: Int): List<Int> {
+        Database.connect(
+            url = postgres.jdbcUrl,
+            driver = "org.postgresql.Driver",
+            user = postgres.username,
+            password = postgres.password,
+        )
+        val ids = mutableListOf<Int>()
+        transaction {
+            exec("SELECT id FROM test_images WHERE test_id = $testId ORDER BY sort_order") { rs ->
+                while (rs.next()) {
+                    ids.add(rs.getInt("id"))
+                }
+            }
+        }
+        return ids
+    }
+
+    suspend fun createRecordViaApi(
+        client: HttpClient,
+        token: String,
+        testId: Int,
+        imageIds: List<Int>,
+        userLogin: String = "recorder@test.com",
+    ): HttpResponse {
+        val itemsJson = imageIds.joinToString(",") { """{"imageId":$it,"metrics":{"placeholderMetric":1.5}}""" }
+        return client.post("/records") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+            setBody("""{"testId":$testId,"userLogin":"$userLogin","startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[$itemsJson]}""")
         }
     }
 

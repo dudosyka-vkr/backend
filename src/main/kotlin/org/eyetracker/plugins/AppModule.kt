@@ -4,6 +4,8 @@ import io.ktor.server.application.*
 import org.eyetracker.auth.dao.UserDao
 import org.eyetracker.auth.service.AuthService
 import org.eyetracker.auth.service.JwtConfig
+import org.eyetracker.record.dao.RecordDao
+import org.eyetracker.record.service.RecordService
 import org.eyetracker.test.dao.TestDao
 import org.eyetracker.test.service.TestService
 import org.koin.dsl.module
@@ -25,4 +27,6 @@ fun Application.buildAppModule() = module {
             .property("storage.uploadDir").getString()
         TestService(get(), uploadDir)
     }
+    single { RecordDao() }
+    single { RecordService(get(), get()) }
 }

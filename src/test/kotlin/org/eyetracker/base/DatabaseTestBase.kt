@@ -41,7 +41,7 @@ abstract class DatabaseTestBase {
     @AfterEach
     fun cleanupDatabase() {
         transaction {
-            exec("TRUNCATE test_images, tests, users RESTART IDENTITY CASCADE")
+            exec("TRUNCATE record_items, records, test_images, tests, users RESTART IDENTITY CASCADE")
         }
     }
 }

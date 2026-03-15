@@ -8,6 +8,7 @@ data class TestResponse(
     val name: String,
     val coverUrl: String,
     val imageUrls: List<String>,
+    val imageIds: List<Int>,
     val createdAt: String,
 )
 

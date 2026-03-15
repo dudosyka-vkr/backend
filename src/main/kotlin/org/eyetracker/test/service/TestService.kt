@@ -163,6 +163,7 @@ class TestService(
             name = testWithImages.test.name,
             coverUrl = "/tests/$testId/cover",
             imageUrls = testWithImages.imageFilenames.indices.map { "/tests/$testId/images/$it" },
+            imageIds = testWithImages.imageIds,
             createdAt = testWithImages.test.createdAt.toString(),
         )
     }

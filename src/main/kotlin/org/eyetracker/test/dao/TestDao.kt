@@ -9,6 +9,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 data class TestWithImages(
     val test: TestEntity,
     val imageFilenames: List<String>,
+    val imageIds: List<Int> = emptyList(),
 )
 
 class TestDao {
@@ -24,32 +25,32 @@ class TestDao {
             this.userId = userId
             this.createdAt = Clock.System.now()
         }
-        imageFilenames.forEachIndexed { index, filename ->
+        val ids = imageFilenames.mapIndexed { index, filename ->
             TestImageEntity.new {
                 this.testId = test.id.value
                 this.filename = filename
                 this.sortOrder = index
-            }
+            }.id.value
         }
-        TestWithImages(test, imageFilenames)
+        TestWithImages(test, imageFilenames, ids)
     }
 
     fun findAll(): List<TestWithImages> = transaction {
         val tests = TestEntity.all().toList()
         tests.map { test ->
-            val images = TestImageEntity.find { TestImageTable.testId eq test.id.value }
+            val imageEntities = TestImageEntity.find { TestImageTable.testId eq test.id.value }
                 .orderBy(TestImageTable.sortOrder to SortOrder.ASC)
-                .map { it.filename }
-            TestWithImages(test, images)
+                .toList()
+            TestWithImages(test, imageEntities.map { it.filename }, imageEntities.map { it.id.value })
         }
     }
 
     fun findById(testId: Int): TestWithImages? = transaction {
         val test = TestEntity.findById(testId) ?: return@transaction null
-        val images = TestImageEntity.find { TestImageTable.testId eq testId }
+        val imageEntities = TestImageEntity.find { TestImageTable.testId eq testId }
             .orderBy(TestImageTable.sortOrder to SortOrder.ASC)
-            .map { it.filename }
-        TestWithImages(test, images)
+            .toList()
+        TestWithImages(test, imageEntities.map { it.filename }, imageEntities.map { it.id.value })
     }
 
     fun update(
@@ -62,14 +63,20 @@ class TestDao {
         test.name = name
         test.coverFilename = coverFilename
         TestImageTable.deleteWhere { TestImageTable.testId eq testId }
-        imageFilenames.forEachIndexed { index, filename ->
+        val ids = imageFilenames.mapIndexed { index, filename ->
             TestImageEntity.new {
                 this.testId = testId
                 this.filename = filename
                 this.sortOrder = index
-            }
+            }.id.value
         }
-        TestWithImages(test, imageFilenames)
+        TestWithImages(test, imageFilenames, ids)
+    }
+
+    fun findImageIdsByTestId(testId: Int): List<Int> = transaction {
+        TestImageEntity.find { TestImageTable.testId eq testId }
+            .orderBy(TestImageTable.sortOrder to SortOrder.ASC)
+            .map { it.id.value }
     }
 
     fun deleteById(testId: Int): Boolean = transaction {

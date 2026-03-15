@@ -107,6 +107,121 @@ class TestControllerIntegrationTest : IntegrationTestBase() {
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
+    // ===== PUT /tests/{id} =====
+
+    @Test
+    fun `admin updates test returns 200`() = testApp { client ->
+        val token = getAdminToken(client)
+        val createResponse = createTestViaApi(client, token, "Original")
+        val created = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject
+        val testId = created["id"]!!.jsonPrimitive.int
+
+        val response = updateTestViaApi(client, token, testId, "Updated")
+        assertEquals(HttpStatusCode.OK, response.status)
+
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals("Updated", body["name"]!!.jsonPrimitive.content)
+        assertEquals(1, body["imageUrls"]!!.jsonArray.size)
+    }
+
+    @Test
+    fun `super admin updates test returns 200`() = testApp { client ->
+        val adminToken = getAdminToken(client)
+        val createResponse = createTestViaApi(client, adminToken, "Original")
+        val created = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject
+        val testId = created["id"]!!.jsonPrimitive.int
+
+        val saToken = getSuperAdminToken(client)
+        val response = updateTestViaApi(client, saToken, testId, "SA Updated")
+        assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `user cannot update test returns 403`() = testApp { client ->
+        val adminToken = getAdminToken(client)
+        val createResponse = createTestViaApi(client, adminToken, "Original")
+        val created = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject
+        val testId = created["id"]!!.jsonPrimitive.int
+
+        val userToken = registerUser(client)
+        val response = updateTestViaApi(client, userToken, testId, "Nope")
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+    }
+
+    @Test
+    fun `update test without auth returns 401`() = testApp { client ->
+        val response = updateTestViaApi(client, "invalid-token", 1, "Nope")
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun `update nonexistent test returns 404`() = testApp { client ->
+        val token = getAdminToken(client)
+        val response = updateTestViaApi(client, token, 99999, "Nope")
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `update test without name returns 400`() = testApp { client ->
+        val token = getAdminToken(client)
+        val createResponse = createTestViaApi(client, token, "Original")
+        val created = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject
+        val testId = created["id"]!!.jsonPrimitive.int
+
+        val response = client.submitFormWithBinaryData(
+            url = "/tests/$testId",
+            formData = formData {
+                append("cover", TestFixtures.sampleCoverBytes, Headers.build {
+                    append(HttpHeaders.ContentType, "image/png")
+                    append(HttpHeaders.ContentDisposition, "filename=\"cover.png\"")
+                })
+                append("images", TestFixtures.sampleImageBytes, Headers.build {
+                    append(HttpHeaders.ContentType, "image/jpeg")
+                    append(HttpHeaders.ContentDisposition, "filename=\"image.jpg\"")
+                })
+            }
+        ) {
+            method = HttpMethod.Put
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `update test replaces files on disk`() = testApp { client ->
+        val token = getAdminToken(client)
+        val createResponse = createTestViaApi(client, token, "Original")
+        val created = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject
+        val testId = created["id"]!!.jsonPrimitive.int
+
+        // Verify original has 2 images
+        assertEquals(2, created["imageUrls"]!!.jsonArray.size)
+
+        // Update with 1 image
+        val updateResponse = updateTestViaApi(client, token, testId, "Updated")
+        assertEquals(HttpStatusCode.OK, updateResponse.status)
+
+        val updated = Json.parseToJsonElement(updateResponse.bodyAsText()).jsonObject
+        assertEquals(1, updated["imageUrls"]!!.jsonArray.size)
+
+        // Verify old files are gone and new ones exist
+        val coverResponse = client.get("/tests/$testId/cover") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.OK, coverResponse.status)
+
+        val img0Response = client.get("/tests/$testId/images/0") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.OK, img0Response.status)
+
+        // Old image index 1 should be gone
+        val img1Response = client.get("/tests/$testId/images/1") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.NotFound, img1Response.status)
+    }
+
     // ===== GET /tests =====
 
     @Test

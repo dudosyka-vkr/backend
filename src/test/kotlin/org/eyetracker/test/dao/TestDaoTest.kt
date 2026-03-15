@@ -83,6 +83,39 @@ class TestDaoTest : DatabaseTestBase() {
     }
 
     @Test
+    fun `update changes name cover and images`() {
+        val created = testDao.create("Original", "cover.jpg", listOf("000.jpg"), userId)
+        val id = created.test.id.value
+
+        val updated = testDao.update(id, "Updated", "cover.png", listOf("000.png", "001.png"))
+        assertNotNull(updated)
+        assertEquals("Updated", updated.test.name)
+        assertEquals("cover.png", updated.test.coverFilename)
+        assertEquals(listOf("000.png", "001.png"), updated.imageFilenames)
+
+        val found = testDao.findById(id)
+        assertNotNull(found)
+        assertEquals("Updated", found.test.name)
+        assertEquals(listOf("000.png", "001.png"), found.imageFilenames)
+    }
+
+    @Test
+    fun `update returns null for nonexistent test`() {
+        assertNull(testDao.update(99999, "Nope", "cover.jpg", listOf("000.jpg")))
+    }
+
+    @Test
+    fun `update replaces all images`() {
+        val created = testDao.create("Test", "cover.jpg", listOf("a.jpg", "b.jpg", "c.jpg"), userId)
+        val id = created.test.id.value
+
+        val updated = testDao.update(id, "Test", "cover.jpg", listOf("x.jpg"))
+        assertNotNull(updated)
+        assertEquals(1, updated.imageFilenames.size)
+        assertEquals("x.jpg", updated.imageFilenames[0])
+    }
+
+    @Test
     fun `deleteById deletes test and images`() {
         val created = testDao.create("ToDelete", "cover.jpg", listOf("a.jpg", "b.jpg"), userId)
         val id = created.test.id.value

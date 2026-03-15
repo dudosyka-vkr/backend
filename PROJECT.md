@@ -221,12 +221,16 @@ sealed class TestResult {
 
 ### Multipart загрузка
 
-Создание теста (`POST /tests`) принимает `multipart/form-data`:
+Создание и обновление теста (`POST /tests`, `PUT /tests/{id}`) принимают `multipart/form-data`:
 - `name` (text) — название теста
 - `cover` (file) — обложка
 - `images` (file, повторяющееся) — стимулирующие изображения
 
 Контроллер буферизирует байты файлов в память при парсинге multipart, затем передаёт `InputStream` в сервис для записи на диск.
+
+### Обновление теста (PUT)
+
+Обновление — это полная замена. Сервис записывает новые файлы во временную директорию (`tests/{id}_tmp`), затем удаляет старую директорию и переименовывает временную в финальную (атомарная замена). В БД удаляются старые записи `test_images` и вставляются новые.
 
 ---
 
@@ -309,6 +313,7 @@ test_images
 | Метод | Путь | Аутентификация | Описание | Ответ |
 |-------|------|----------------|----------|-------|
 | POST | `/tests` | JWT (ADMIN+) | Создать тест (multipart: name, cover, images) | `201 TestResponse` |
+| PUT | `/tests/{id}` | JWT (ADMIN+) | Обновить тест (multipart: name, cover, images — полная замена) | `200 TestResponse` или `404` |
 | GET | `/tests` | JWT | Список всех тестов | `200 {"tests":[...]}` |
 | GET | `/tests/{id}` | JWT | Получить тест по ID | `200 TestResponse` или `404` |
 | DELETE | `/tests/{id}` | JWT (ADMIN+) | Удалить тест и файлы | `204` или `404` |
@@ -333,13 +338,13 @@ test_images
 
 ### Обзор
 
-98 тестов, разделённых на три категории:
+113 тестов, разделённых на три категории:
 
 | Категория | Количество | Подход |
 |-----------|------------|--------|
-| Unit-тесты сервисов (AuthServiceTest, TestServiceTest) | 34 | MockK для моков DAO, без БД |
-| Тесты DAO (UserDaoTest, TestDaoTest) | 17 | Testcontainers PostgreSQL, реальная БД |
-| Интеграционные тесты (контроллеры Auth + Test) | 47 | Полное приложение Ktor + Testcontainers, реальные HTTP-запросы |
+| Unit-тесты сервисов (AuthServiceTest, TestServiceTest) | 39 | MockK для моков DAO, без БД |
+| Тесты DAO (UserDaoTest, TestDaoTest) | 20 | Testcontainers PostgreSQL, реальная БД |
+| Интеграционные тесты (контроллеры Auth + Test) | 54 | Полное приложение Ktor + Testcontainers, реальные HTTP-запросы |
 
 ### Инфраструктура тестов
 
@@ -407,7 +412,7 @@ Docker-окружение находится в `deploy/` (на основе htt
 | `make deploy-stop` | Остановка всех контейнеров |
 | `make build` | Только сборка fat jar |
 | `make clean` | Очистка артефактов сборки + удаление jar из dist |
-| `make test` | Запуск всех тестов (98 тестов, требуется Docker) |
+| `make test` | Запуск всех тестов (113 тестов, требуется Docker) |
 | `make test-unit` | Только unit-тесты (сервисы + DAO) |
 | `make test-integration` | Только интеграционные тесты (контроллеры) |
 

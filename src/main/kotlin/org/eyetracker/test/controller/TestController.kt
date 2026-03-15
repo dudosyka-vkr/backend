@@ -81,6 +81,57 @@ fun Route.testRoutes(testService: TestService) {
                 }
             }
 
+            put("/{id}") {
+                if (!call.requireAdmin()) return@put
+
+                val testId = call.parameters["id"]?.toIntOrNull()
+                    ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid test ID"))
+
+                val multipart = call.receiveMultipart()
+                var name: String? = null
+                var coverBytes: ByteArray? = null
+                var coverExtension = "jpg"
+                val imageEntries = mutableListOf<Pair<ByteArray, String>>()
+
+                multipart.forEachPart { part ->
+                    when (part) {
+                        is PartData.FormItem -> {
+                            if (part.name == "name") name = part.value
+                        }
+                        is PartData.FileItem -> {
+                            val ext = part.originalFileName
+                                ?.substringAfterLast('.', "jpg")
+                                ?.lowercase() ?: "jpg"
+                            val bytes = part.provider().toByteArray()
+                            when (part.name) {
+                                "cover" -> {
+                                    coverBytes = bytes
+                                    coverExtension = ext
+                                }
+                                "images" -> {
+                                    imageEntries.add(bytes to ext)
+                                }
+                            }
+                        }
+                        else -> {}
+                    }
+                    part.dispose()
+                }
+
+                if (name == null || coverBytes == null) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Name and cover are required"))
+                    return@put
+                }
+
+                val coverStream: InputStream = ByteArrayInputStream(coverBytes!!)
+                val imageStreams = imageEntries.map { (bytes, ext) -> ByteArrayInputStream(bytes) as InputStream to ext }
+
+                when (val result = testService.update(testId, name!!, coverStream, coverExtension, imageStreams)) {
+                    is TestResult.Success -> call.respond(HttpStatusCode.OK, result.response)
+                    is TestResult.Error -> call.respond(HttpStatusCode.fromValue(result.status), ErrorResponse(result.message))
+                }
+            }
+
             get {
                 call.respond(testService.getAll())
             }

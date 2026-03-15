@@ -63,6 +63,63 @@ class TestService(
         return TestResult.Success(toResponse(testWithImages))
     }
 
+    fun update(
+        testId: Int,
+        name: String,
+        coverStream: InputStream,
+        coverExtension: String,
+        imageStreams: List<Pair<InputStream, String>>,
+    ): TestResult {
+        if (name.isBlank()) {
+            return TestResult.Error("Name is required", 400)
+        }
+        if (imageStreams.isEmpty()) {
+            return TestResult.Error("At least one image is required", 400)
+        }
+
+        testDao.findById(testId)
+            ?: return TestResult.Error("Test not found", 404)
+
+        val coverFilename = "cover.$coverExtension"
+        val imageFilenames = imageStreams.mapIndexed { index, (_, ext) ->
+            "${index.toString().padStart(3, '0')}.$ext"
+        }
+
+        val testDir = File(uploadDir, "tests/$testId")
+        val tempDir = File(uploadDir, "tests/${testId}_tmp")
+
+        try {
+            tempDir.mkdirs()
+            coverStream.use { input ->
+                File(tempDir, coverFilename).outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            imageStreams.forEachIndexed { index, (stream, _) ->
+                val filename = imageFilenames[index]
+                stream.use { input ->
+                    File(tempDir, filename).outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            tempDir.deleteRecursively()
+            return TestResult.Error("Failed to save files: ${e.message}", 500)
+        }
+
+        val updated = testDao.update(testId, name, coverFilename, imageFilenames)
+            ?: run {
+                tempDir.deleteRecursively()
+                return TestResult.Error("Test not found", 404)
+            }
+
+        testDir.deleteRecursively()
+        tempDir.renameTo(testDir)
+
+        return TestResult.Success(toResponse(updated))
+    }
+
     fun getAll(): TestListResponse {
         val tests = testDao.findAll()
         return TestListResponse(tests.map { toResponse(it) })

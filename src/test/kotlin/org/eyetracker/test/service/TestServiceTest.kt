@@ -142,6 +142,73 @@ class TestServiceTest {
         assertTrue(File(uploadDir, "tests/4/000.webp").exists())
     }
 
+    // ===== update() =====
+
+    @Test
+    fun `update success replaces files and DB record`() {
+        val oldTwi = mockTestWithImages(1, "Old", "cover.jpg", listOf("000.jpg"))
+        val newTwi = mockTestWithImages(1, "New", "cover.png", listOf("000.png", "001.png"))
+        every { testDao.findById(1) } returns oldTwi
+        every { testDao.update(1, "New", "cover.png", listOf("000.png", "001.png")) } returns newTwi
+
+        // Create old files
+        val dir = File(uploadDir, "tests/1").also { it.mkdirs() }
+        File(dir, "cover.jpg").writeText("old-cover")
+        File(dir, "000.jpg").writeText("old-img")
+
+        val result = testService.update(
+            1, "New", dummyStream("new-cover"), "png",
+            listOf(dummyStream("img0") to "png", dummyStream("img1") to "png")
+        )
+
+        assertIs<TestResult.Success>(result)
+        assertEquals("New", result.response.name)
+        assertEquals(2, result.response.imageUrls.size)
+        assertTrue(File(uploadDir, "tests/1/cover.png").exists())
+        assertTrue(File(uploadDir, "tests/1/000.png").exists())
+        assertTrue(File(uploadDir, "tests/1/001.png").exists())
+        assertTrue(!File(uploadDir, "tests/1/cover.jpg").exists())
+        assertTrue(!File(uploadDir, "tests/1/000.jpg").exists())
+    }
+
+    @Test
+    fun `update fails with blank name`() {
+        val result = testService.update(1, "   ", dummyStream(), "jpg", listOf(dummyStream() to "jpg"))
+        assertIs<TestResult.Error>(result)
+        assertEquals(400, result.status)
+    }
+
+    @Test
+    fun `update fails with empty images`() {
+        val result = testService.update(1, "Valid", dummyStream(), "jpg", emptyList())
+        assertIs<TestResult.Error>(result)
+        assertEquals(400, result.status)
+    }
+
+    @Test
+    fun `update returns 404 when test not found`() {
+        every { testDao.findById(999) } returns null
+        val result = testService.update(999, "Name", dummyStream(), "jpg", listOf(dummyStream() to "jpg"))
+        assertIs<TestResult.Error>(result)
+        assertEquals(404, result.status)
+    }
+
+    @Test
+    fun `update rolls back temp dir on IO failure`() {
+        val twi = mockTestWithImages(1, "Old", "cover.jpg", listOf("000.jpg"))
+        every { testDao.findById(1) } returns twi
+
+        val badStream = mockk<InputStream>()
+        every { badStream.read(any<ByteArray>()) } throws IOException("disk full")
+        every { badStream.read(any<ByteArray>(), any(), any()) } throws IOException("disk full")
+        every { badStream.close() } returns Unit
+
+        val result = testService.update(1, "Fail", badStream, "jpg", listOf(dummyStream() to "jpg"))
+        assertIs<TestResult.Error>(result)
+        assertEquals(500, result.status)
+        assertTrue(!File(uploadDir, "tests/1_tmp").exists())
+    }
+
     // ===== getAll() =====
 
     @Test

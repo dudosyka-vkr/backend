@@ -52,6 +52,26 @@ class TestDao {
         TestWithImages(test, images)
     }
 
+    fun update(
+        testId: Int,
+        name: String,
+        coverFilename: String,
+        imageFilenames: List<String>,
+    ): TestWithImages? = transaction {
+        val test = TestEntity.findById(testId) ?: return@transaction null
+        test.name = name
+        test.coverFilename = coverFilename
+        TestImageTable.deleteWhere { TestImageTable.testId eq testId }
+        imageFilenames.forEachIndexed { index, filename ->
+            TestImageEntity.new {
+                this.testId = testId
+                this.filename = filename
+                this.sortOrder = index
+            }
+        }
+        TestWithImages(test, imageFilenames)
+    }
+
     fun deleteById(testId: Int): Boolean = transaction {
         val test = TestEntity.findById(testId) ?: return@transaction false
         TestImageTable.deleteWhere { TestImageTable.testId eq testId }

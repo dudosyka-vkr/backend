@@ -132,6 +132,35 @@ abstract class IntegrationTestBase {
         return loginUser(client, TestFixtures.SUPER_ADMIN_LOGIN, TestFixtures.VALID_PASSWORD)
     }
 
+    suspend fun updateTestViaApi(
+        client: HttpClient,
+        token: String,
+        testId: Int,
+        name: String = "Updated Test",
+        coverBytes: ByteArray = TestFixtures.sampleCoverBytes,
+        imageBytesList: List<ByteArray> = listOf(TestFixtures.sampleImageBytes),
+    ): HttpResponse {
+        return client.submitFormWithBinaryData(
+            url = "/tests/$testId",
+            formData = formData {
+                append("name", name)
+                append("cover", coverBytes, Headers.build {
+                    append(HttpHeaders.ContentType, "image/png")
+                    append(HttpHeaders.ContentDisposition, "filename=\"cover.png\"")
+                })
+                imageBytesList.forEach { imageBytes ->
+                    append("images", imageBytes, Headers.build {
+                        append(HttpHeaders.ContentType, "image/jpeg")
+                        append(HttpHeaders.ContentDisposition, "filename=\"image.jpg\"")
+                    })
+                }
+            }
+        ) {
+            method = HttpMethod.Put
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+    }
+
     suspend fun createTestViaApi(
         client: HttpClient,
         token: String,

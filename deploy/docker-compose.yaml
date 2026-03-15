@@ -1,0 +1,73 @@
+networks:
+  iternal:
+    name: iternal
+  exposed:
+    name: exposed
+services:
+  jvm:
+    build: ./jvm
+    volumes:
+      - ./jvm/dist:/opt/application
+      - ./jvm/home:/home
+    networks:
+      - iternal
+      - exposed
+    environment:
+      DATABASE_URL: "jdbc:postgresql://postgres:5432/eyetracker"
+      DATABASE_USER: "postgres"
+      DATABASE_PASSWORD: "my-secret-pw"
+    depends_on:
+      - postgres
+#    Here u can set RAM and CPU limits for the container
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '1.5'
+#          memory: 7168M #7GB
+    restart: always
+    entrypoint: /bin/bash /home/startup.sh
+  nginx:
+    build: ./nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/home:/home
+    networks:
+      - exposed
+    depends_on:
+      - jvm
+    entrypoint: /bin/bash /home/startup.sh
+  maria:
+    build: ./mariadb
+    volumes:
+      - ./mariadb/home:/home
+      - ./mariadb/start_dump:/docker-entrypoint-initdb.d
+    networks:
+      - iternal
+#    Here u can set RAM and CPU limits for the container
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '1.5'
+#          memory: 7168M #7GB
+  postgres:
+    build: ./postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: my-secret-pw
+    volumes:
+      - ./postgres/home:/home
+      - ./postgres/root:/root
+      - ./postgres/init.d:/docker-entrypoint-initdb.d
+    networks:
+      - iternal
+    ports:
+      - "5432:5432"
+#    Here u can set RAM and CPU limits for the container
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '1.5'
+#          memory: 7168M #7G

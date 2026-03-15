@@ -31,7 +31,7 @@ backend/
 │   │   │   ├── TestImageTable.kt              # Exposed IntIdTable("test_images")
 │   │   │   ├── TestEntity.kt                  # Exposed IntEntity для tests
 │   │   │   ├── TestImageEntity.kt             # Exposed IntEntity для test_images
-│   │   │   └── TestDao.kt                     # create(), findAll(), findById(), deleteById()
+│   │   │   └── TestDao.kt                     # create(), findAll(), findById(), update(), deleteById(), findImageIdsByTestId()
 │   │   ├── dto/
 │   │   │   └── TestDtos.kt                    # TestResponse, TestListResponse, ErrorResponse
 │   │   └── service/
@@ -70,15 +70,20 @@ backend/
 │   │   ├── IntegrationTestBase.kt             # Базовый класс для интеграционных тестов
 │   │   └── TestFixtures.kt                    # Общие тестовые данные и фикстуры
 │   ├── auth/
-│   │   ├── dao/UserDaoTest.kt                 # 7 тестов UserDao
-│   │   ├── service/AuthServiceTest.kt         # 13 тестов AuthService (MockK)
+│   │   ├── dao/UserDaoTest.kt                 # 9 тестов UserDao
+│   │   ├── service/AuthServiceTest.kt         # 14 тестов AuthService (MockK)
 │   │   └── controller/
 │   │       └── AuthControllerIntegrationTest.kt  # 18 интеграционных тестов
-│   └── test/
-│       ├── dao/TestDaoTest.kt                 # 10 тестов TestDao
-│       ├── service/TestServiceTest.kt         # 21 тест TestService (MockK)
+│   ├── test/
+│   │   ├── dao/TestDaoTest.kt                 # 13 тестов TestDao
+│   │   ├── service/TestServiceTest.kt         # 25 тестов TestService (MockK)
+│   │   └── controller/
+│   │       └── TestControllerIntegrationTest.kt  # 36 интеграционных тестов
+│   └── record/
+│       ├── dao/RecordDaoTest.kt               # 11 тестов RecordDao
+│       ├── service/RecordServiceTest.kt       # 11 тестов RecordService (MockK)
 │       └── controller/
-│           └── TestControllerIntegrationTest.kt  # 29 интеграционных тестов
+│           └── RecordControllerIntegrationTest.kt  # 16 интеграционных тестов
 ├── src/test/resources/
 │   └── application-test.conf                  # Тестовая конфигурация
 ├── deploy/                                    # Docker-окружение (docker-compose, postgres, jvm, nginx)
@@ -445,12 +450,12 @@ Query-параметры для `GET /records`:
 
 ### Обзор
 
-151 тест, разделённых на три категории:
+153 теста, разделённых на три категории:
 
 | Категория | Количество | Подход |
 |-----------|------------|--------|
 | Unit-тесты сервисов (AuthServiceTest, TestServiceTest, RecordServiceTest) | 50 | MockK для моков DAO, без БД |
-| Тесты DAO (UserDaoTest, TestDaoTest, RecordDaoTest) | 31 | Testcontainers PostgreSQL, реальная БД |
+| Тесты DAO (UserDaoTest, TestDaoTest, RecordDaoTest) | 33 | Testcontainers PostgreSQL, реальная БД |
 | Интеграционные тесты (контроллеры Auth + Test + Record) | 70 | Полное приложение Ktor + Testcontainers, реальные HTTP-запросы |
 
 ### Инфраструктура тестов
@@ -475,7 +480,7 @@ Query-параметры для `GET /records`:
 Unit-тесты покрывают все ветки бизнес-логики:
 - `AuthService`: login (успех, не найден, неверный пароль), register (успех, дубликат), createUser (все комбинации ролей)
 - `TestService`: create (успех, пустое имя, нет изображений, ошибка I/O), getAll, getById, update, delete, getCoverFile, getImageFile (все граничные случаи)
-- `RecordService`: create (валидация: blank login, empty items, negative duration, invalid timestamp, test not found, invalid imageId), create success, getById, getAll (пагинация, clamping)
+- `RecordService`: create (валидация: empty items, negative duration, invalid timestamp, test not found, invalid imageId), create success, getById, getAll (пагинация, clamping)
 
 Интеграционные тесты проверяют:
 - HTTP-статусы и тела ответов
@@ -521,7 +526,7 @@ Docker-окружение находится в `deploy/` (на основе htt
 | `make deploy-stop` | Остановка всех контейнеров |
 | `make build` | Только сборка fat jar |
 | `make clean` | Очистка артефактов сборки + удаление jar из dist |
-| `make test` | Запуск всех тестов (151 тест, требуется Docker) |
+| `make test` | Запуск всех тестов (153 теста, требуется Docker) |
 | `make test-unit` | Только unit-тесты (сервисы + DAO) |
 | `make test-integration` | Только интеграционные тесты (контроллеры) |
 

@@ -52,7 +52,112 @@ curl http://localhost:8080/protected-endpoint \
 Token is not valid or has expired
 ```
 
+## Создание пользователя (ADMIN+)
+
+```bash
+curl -X POST http://localhost:8080/auth/users \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <admin_token>" \
+  -d '{"login":"newuser@test.com","password":"secret123","role":"USER"}'
+```
+
+Ответ `201`:
+```json
+{"id":2,"login":"newuser@test.com","role":"USER"}
+```
+
+Ответ `403` (недостаточно прав):
+```json
+{"error":"Forbidden"}
+```
+
+Ответ `409` (пользователь существует):
+```json
+{"error":"User already exists"}
+```
+
+## Тесты
+
+### Создать тест (multipart, ADMIN+)
+
+```bash
+curl -X POST http://localhost:8080/tests \
+  -H "Authorization: Bearer <admin_token>" \
+  -F "name=My Test" \
+  -F "cover=@cover.png;type=image/png" \
+  -F "images=@image1.jpg;type=image/jpeg" \
+  -F "images=@image2.jpg;type=image/jpeg"
+```
+
+Ответ `201`:
+```json
+{
+  "id": 1,
+  "name": "My Test",
+  "coverUrl": "/tests/1/cover",
+  "imageUrls": ["/tests/1/images/0", "/tests/1/images/1"],
+  "imageIds": [1, 2],
+  "createdAt": "2025-01-15T12:00:00Z"
+}
+```
+
+### Обновить тест (multipart, ADMIN+)
+
+```bash
+curl -X PUT http://localhost:8080/tests/1 \
+  -H "Authorization: Bearer <admin_token>" \
+  -F "name=Updated Test" \
+  -F "cover=@new_cover.png;type=image/png" \
+  -F "images=@new_image.jpg;type=image/jpeg"
+```
+
+Ответ `200`: аналогичен созданию. Ответ `404` если тест не найден.
+
+### Список тестов
+
+```bash
+curl http://localhost:8080/tests \
+  -H "Authorization: Bearer <token>"
+```
+
+Ответ `200`:
+```json
+{"tests":[{"id":1,"name":"My Test","coverUrl":"/tests/1/cover","imageUrls":["/tests/1/images/0"],"imageIds":[1],"createdAt":"..."}]}
+```
+
+### Получить тест по ID
+
+```bash
+curl http://localhost:8080/tests/1 \
+  -H "Authorization: Bearer <token>"
+```
+
+Ответ `200`: TestResponse. Ответ `404` если не найден.
+
+### Удалить тест (ADMIN+)
+
+```bash
+curl -X DELETE http://localhost:8080/tests/1 \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+Ответ `204` (без тела). Ответ `404` если не найден.
+
+### Скачать обложку / изображение
+
+```bash
+# Обложка
+curl http://localhost:8080/tests/1/cover \
+  -H "Authorization: Bearer <token>" -o cover.png
+
+# Изображение по индексу (0-based)
+curl http://localhost:8080/tests/1/images/0 \
+  -H "Authorization: Bearer <token>" -o image.jpg
+```
+
 ## Прохождения (Records)
+
+Поле `userLogin` в ответах заполняется автоматически из JWT токена (email аутентифицированного пользователя).
 
 ### Создать прохождение
 

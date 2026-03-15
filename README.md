@@ -36,7 +36,7 @@ make local
 Требуется Docker (для Testcontainers — поднимает PostgreSQL автоматически).
 
 ```bash
-# Запустить все тесты (113 тестов)
+# Запустить все тесты (153 теста)
 make test
 
 # Только unit-тесты (сервисы + DAO)
@@ -59,6 +59,7 @@ make test-integration
 | URL базы данных | `DATABASE_URL` | `jdbc:postgresql://localhost:5432/eyetracker` |
 | Пользователь БД | `DATABASE_USER` | `postgres` |
 | Пароль БД | `DATABASE_PASSWORD` | `my-secret-pw` |
+| Директория загрузок | `UPLOAD_DIR` | `uploads` |
 
 ## Примеры запросов
 

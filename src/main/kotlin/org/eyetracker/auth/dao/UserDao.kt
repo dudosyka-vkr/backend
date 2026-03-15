@@ -8,10 +8,11 @@ class UserDao {
         UserEntity.find { UserTable.email eq login }.firstOrNull()
     }
 
-    fun createUser(login: String, passwordHash: String): UserEntity = transaction {
+    fun createUser(login: String, passwordHash: String, role: String = "USER"): UserEntity = transaction {
         UserEntity.new {
             email = login
             this.passwordHash = passwordHash
+            this.role = role
             createdAt = Clock.System.now()
         }
     }

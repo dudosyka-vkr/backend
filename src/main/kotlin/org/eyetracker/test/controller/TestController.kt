@@ -1,0 +1,131 @@
+package org.eyetracker.test.controller
+
+import io.ktor.http.*
+import io.ktor.http.content.*
+import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import org.eyetracker.test.dto.ErrorResponse
+import org.eyetracker.test.service.TestResult
+import org.eyetracker.test.service.TestService
+import io.ktor.utils.io.jvm.javaio.*
+import java.io.InputStream
+
+private fun RoutingCall.userId(): Int =
+    principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
+
+private fun RoutingCall.role(): String =
+    principal<JWTPrincipal>()!!.payload.getClaim("role").asString()
+
+private suspend fun RoutingCall.requireAdmin(): Boolean {
+    val r = role()
+    if (r != "ADMIN" && r != "SUPER_ADMIN") {
+        respond(HttpStatusCode.Forbidden, ErrorResponse("Admin access required"))
+        return false
+    }
+    return true
+}
+
+fun Route.testRoutes(testService: TestService) {
+    authenticate("auth-jwt") {
+        route("/tests") {
+            post {
+                if (!call.requireAdmin()) return@post
+
+                val userId = call.userId()
+                val multipart = call.receiveMultipart()
+                var name: String? = null
+                var coverStream: InputStream? = null
+                var coverExtension = "jpg"
+                val imageStreams = mutableListOf<Pair<InputStream, String>>()
+
+                multipart.forEachPart { part ->
+                    when (part) {
+                        is PartData.FormItem -> {
+                            if (part.name == "name") name = part.value
+                        }
+                        is PartData.FileItem -> {
+                            val ext = part.originalFileName
+                                ?.substringAfterLast('.', "jpg")
+                                ?.lowercase() ?: "jpg"
+                            when (part.name) {
+                                "cover" -> {
+                                    coverStream = part.provider().toInputStream()
+                                    coverExtension = ext
+                                }
+                                "images" -> {
+                                    imageStreams.add(part.provider().toInputStream() to ext)
+                                }
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+
+                if (name == null || coverStream == null) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Name and cover are required"))
+                    return@post
+                }
+
+                when (val result = testService.create(name!!, coverStream!!, coverExtension, imageStreams, userId)) {
+                    is TestResult.Success -> call.respond(HttpStatusCode.Created, result.response)
+                    is TestResult.Error -> call.respond(HttpStatusCode.fromValue(result.status), ErrorResponse(result.message))
+                }
+            }
+
+            get {
+                call.respond(testService.getAll())
+            }
+
+            get("/{id}") {
+                val testId = call.parameters["id"]?.toIntOrNull()
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid test ID"))
+
+                when (val result = testService.getById(testId)) {
+                    is TestResult.Success -> call.respond(result.response)
+                    is TestResult.Error -> call.respond(HttpStatusCode.fromValue(result.status), ErrorResponse(result.message))
+                }
+            }
+
+            delete("/{id}") {
+                if (!call.requireAdmin()) return@delete
+
+                val testId = call.parameters["id"]?.toIntOrNull()
+                    ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid test ID"))
+
+                when (val result = testService.delete(testId)) {
+                    is TestResult.Success -> call.respond(HttpStatusCode.NoContent)
+                    is TestResult.Error -> call.respond(HttpStatusCode.fromValue(result.status), ErrorResponse(result.message))
+                }
+            }
+
+            get("/{id}/cover") {
+                val testId = call.parameters["id"]?.toIntOrNull()
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid test ID"))
+
+                val file = testService.getCoverFile(testId)
+                if (file == null) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Test not found"))
+                } else {
+                    call.respondFile(file)
+                }
+            }
+
+            get("/{id}/images/{index}") {
+                val testId = call.parameters["id"]?.toIntOrNull()
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid test ID"))
+                val index = call.parameters["index"]?.toIntOrNull()
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid image index"))
+
+                val file = testService.getImageFile(testId, index)
+                if (file == null) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Image not found"))
+                } else {
+                    call.respondFile(file)
+                }
+            }
+        }
+    }
+}

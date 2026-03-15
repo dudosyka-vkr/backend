@@ -9,5 +9,6 @@ class UserEntity(id: EntityID<Int>) : IntEntity(id) {
 
     var email by UserTable.email
     var passwordHash by UserTable.passwordHash
+    var role by UserTable.role
     var createdAt by UserTable.createdAt
 }

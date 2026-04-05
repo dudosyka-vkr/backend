@@ -10,6 +10,7 @@ data class TestWithImages(
     val test: TestEntity,
     val imageFilenames: List<String>,
     val imageIds: List<Int> = emptyList(),
+    val fixationTrackingAreas: List<String?> = emptyList(),
 )
 
 class TestDao {
@@ -25,14 +26,14 @@ class TestDao {
             this.userId = userId
             this.createdAt = Clock.System.now()
         }
-        val ids = imageFilenames.mapIndexed { index, filename ->
+        val images = imageFilenames.mapIndexed { index, filename ->
             TestImageEntity.new {
                 this.testId = test.id.value
                 this.filename = filename
                 this.sortOrder = index
-            }.id.value
+            }
         }
-        TestWithImages(test, imageFilenames, ids)
+        TestWithImages(test, imageFilenames, images.map { it.id.value }, images.map { it.fixationTrackingArea })
     }
 
     fun findAll(): List<TestWithImages> = transaction {
@@ -41,7 +42,12 @@ class TestDao {
             val imageEntities = TestImageEntity.find { TestImageTable.testId eq test.id.value }
                 .orderBy(TestImageTable.sortOrder to SortOrder.ASC)
                 .toList()
-            TestWithImages(test, imageEntities.map { it.filename }, imageEntities.map { it.id.value })
+            TestWithImages(
+                test,
+                imageEntities.map { it.filename },
+                imageEntities.map { it.id.value },
+                imageEntities.map { it.fixationTrackingArea },
+            )
         }
     }
 
@@ -50,7 +56,12 @@ class TestDao {
         val imageEntities = TestImageEntity.find { TestImageTable.testId eq testId }
             .orderBy(TestImageTable.sortOrder to SortOrder.ASC)
             .toList()
-        TestWithImages(test, imageEntities.map { it.filename }, imageEntities.map { it.id.value })
+        TestWithImages(
+            test,
+            imageEntities.map { it.filename },
+            imageEntities.map { it.id.value },
+            imageEntities.map { it.fixationTrackingArea },
+        )
     }
 
     fun update(
@@ -63,20 +74,26 @@ class TestDao {
         test.name = name
         test.coverFilename = coverFilename
         TestImageTable.deleteWhere { TestImageTable.testId eq testId }
-        val ids = imageFilenames.mapIndexed { index, filename ->
+        val images = imageFilenames.mapIndexed { index, filename ->
             TestImageEntity.new {
                 this.testId = testId
                 this.filename = filename
                 this.sortOrder = index
-            }.id.value
+            }
         }
-        TestWithImages(test, imageFilenames, ids)
+        TestWithImages(test, imageFilenames, images.map { it.id.value }, images.map { it.fixationTrackingArea })
     }
 
     fun findImageIdsByTestId(testId: Int): List<Int> = transaction {
         TestImageEntity.find { TestImageTable.testId eq testId }
             .orderBy(TestImageTable.sortOrder to SortOrder.ASC)
             .map { it.id.value }
+    }
+
+    fun updateImageFixationArea(imageId: Int, fixationTrackingArea: String): Boolean = transaction {
+        val image = TestImageEntity.findById(imageId) ?: return@transaction false
+        image.fixationTrackingArea = fixationTrackingArea
+        true
     }
 
     fun deleteById(testId: Int): Boolean = transaction {

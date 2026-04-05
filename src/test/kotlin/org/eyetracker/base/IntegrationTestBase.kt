@@ -14,32 +14,22 @@ import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.mindrot.jbcrypt.BCrypt
-import org.testcontainers.containers.PostgreSQLContainer
-import org.testcontainers.junit.jupiter.Container
-import org.testcontainers.junit.jupiter.Testcontainers
 import java.io.File
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.transaction
 
-@Testcontainers
-abstract class IntegrationTestBase {
+private const val JDBC_URL = "jdbc:postgresql://localhost:5432/eyetracker_integration"
+private const val DB_USER = "postgres"
+private const val DB_PASSWORD = "my-secret-pw"
 
-    companion object {
-        @Container
-        @JvmStatic
-        val postgres = PostgreSQLContainer("postgres:16-alpine").apply {
-            withDatabaseName("eyetracker_integration")
-            withUsername("test")
-            withPassword("test")
-        }
-    }
+abstract class IntegrationTestBase {
 
     private val uploadDir = "build/test-uploads"
 
     @BeforeEach
     fun setupDb() {
         Flyway.configure()
-            .dataSource(postgres.jdbcUrl, postgres.username, postgres.password)
+            .dataSource(JDBC_URL, DB_USER, DB_PASSWORD)
             .cleanDisabled(false)
             .load()
             .also { it.clean(); it.migrate() }
@@ -47,17 +37,15 @@ abstract class IntegrationTestBase {
 
     @AfterEach
     fun cleanup() {
-        // Clean DB
         Database.connect(
-            url = postgres.jdbcUrl,
+            url = JDBC_URL,
             driver = "org.postgresql.Driver",
-            user = postgres.username,
-            password = postgres.password,
+            user = DB_USER,
+            password = DB_PASSWORD,
         )
         transaction {
             exec("TRUNCATE record_items, records, test_images, tests, users RESTART IDENTITY CASCADE")
         }
-        // Clean upload files
         File(uploadDir).deleteRecursively()
     }
 
@@ -70,10 +58,10 @@ abstract class IntegrationTestBase {
                 "jwt.audience" to "http://localhost/",
                 "jwt.realm" to "Test API",
                 "storage.uploadDir" to uploadDir,
-                "database.url" to postgres.jdbcUrl,
+                "database.url" to JDBC_URL,
                 "database.driver" to "org.postgresql.Driver",
-                "database.user" to postgres.username,
-                "database.password" to postgres.password,
+                "database.user" to DB_USER,
+                "database.password" to DB_PASSWORD,
             )
         }
         application {
@@ -111,10 +99,10 @@ abstract class IntegrationTestBase {
 
     fun insertUserDirectly(login: String, password: String, role: String) {
         Database.connect(
-            url = postgres.jdbcUrl,
+            url = JDBC_URL,
             driver = "org.postgresql.Driver",
-            user = postgres.username,
-            password = postgres.password,
+            user = DB_USER,
+            password = DB_PASSWORD,
         )
         val hashed = BCrypt.hashpw(password, BCrypt.gensalt())
         transaction {
@@ -163,10 +151,10 @@ abstract class IntegrationTestBase {
 
     fun getImageIdsFromDb(testId: Int): List<Int> {
         Database.connect(
-            url = postgres.jdbcUrl,
+            url = JDBC_URL,
             driver = "org.postgresql.Driver",
-            user = postgres.username,
-            password = postgres.password,
+            user = DB_USER,
+            password = DB_PASSWORD,
         )
         val ids = mutableListOf<Int>()
         transaction {

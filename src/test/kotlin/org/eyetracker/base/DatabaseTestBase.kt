@@ -5,36 +5,26 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
-import org.testcontainers.containers.PostgreSQLContainer
-import org.testcontainers.junit.jupiter.Container
-import org.testcontainers.junit.jupiter.Testcontainers
 
-@Testcontainers
+private const val JDBC_URL = "jdbc:postgresql://localhost:5432/eyetracker_test"
+private const val DB_USER = "postgres"
+private const val DB_PASSWORD = "my-secret-pw"
+
 abstract class DatabaseTestBase {
-
-    companion object {
-        @Container
-        @JvmStatic
-        val postgres = PostgreSQLContainer("postgres:16-alpine").apply {
-            withDatabaseName("eyetracker_test")
-            withUsername("test")
-            withPassword("test")
-        }
-    }
 
     @BeforeEach
     fun setupDatabase() {
         Flyway.configure()
-            .dataSource(postgres.jdbcUrl, postgres.username, postgres.password)
+            .dataSource(JDBC_URL, DB_USER, DB_PASSWORD)
             .cleanDisabled(false)
             .load()
             .also { it.clean(); it.migrate() }
 
         Database.connect(
-            url = postgres.jdbcUrl,
+            url = JDBC_URL,
             driver = "org.postgresql.Driver",
-            user = postgres.username,
-            password = postgres.password,
+            user = DB_USER,
+            password = DB_PASSWORD,
         )
     }
 

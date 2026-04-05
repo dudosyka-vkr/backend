@@ -6,4 +6,5 @@ object TestImageTable : IntIdTable("test_images") {
     val testId = integer("test_id").references(TestTable.id)
     val filename = varchar("filename", 255)
     val sortOrder = integer("sort_order")
+    val fixationTrackingArea = text("fixation_tracking_area").nullable()
 }

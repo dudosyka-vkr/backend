@@ -4,6 +4,7 @@ import org.eyetracker.test.dao.TestDao
 import org.eyetracker.test.dao.TestWithImages
 import org.eyetracker.test.dto.TestListResponse
 import org.eyetracker.test.dto.TestResponse
+import org.eyetracker.test.dto.UpdateFixationAreaResponse
 import java.io.File
 import java.io.InputStream
 
@@ -142,6 +143,12 @@ class TestService(
         return TestResult.Success(toResponse(testWithImages))
     }
 
+    fun updateImageFixationArea(imageId: Int, fixationTrackingArea: String): UpdateFixationAreaResponse? {
+        val updated = testDao.updateImageFixationArea(imageId, fixationTrackingArea)
+        if (!updated) return null
+        return UpdateFixationAreaResponse(imageId, fixationTrackingArea)
+    }
+
     fun getCoverFile(testId: Int): File? {
         val testWithImages = testDao.findById(testId) ?: return null
         val file = File(uploadDir, "tests/$testId/${testWithImages.test.coverFilename}")
@@ -164,6 +171,7 @@ class TestService(
             coverUrl = "/tests/$testId/cover",
             imageUrls = testWithImages.imageFilenames.indices.map { "/tests/$testId/images/$it" },
             imageIds = testWithImages.imageIds,
+            fixationTrackingAreas = testWithImages.fixationTrackingAreas,
             createdAt = testWithImages.test.createdAt.toString(),
         )
     }

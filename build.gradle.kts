@@ -57,9 +57,9 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation("io.ktor:ktor-server-test-host:$ktor_version")
     testImplementation("io.ktor:ktor-client-content-negotiation:$ktor_version")
-    testImplementation("org.testcontainers:testcontainers:1.20.4")
-    testImplementation("org.testcontainers:postgresql:1.20.4")
-    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("org.testcontainers:testcontainers:1.21.0")
+    testImplementation("org.testcontainers:postgresql:1.21.0")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.0")
     testImplementation("io.insert-koin:koin-test:$koin_version")
     testImplementation("io.insert-koin:koin-test-junit5:$koin_version")
     testImplementation("io.mockk:mockk:1.13.14")
@@ -67,6 +67,12 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    val colimaSocket = "${System.getProperty("user.home")}/.colima/default/docker.sock"
+    if (File(colimaSocket).exists()) {
+        environment("DOCKER_HOST", "unix://$colimaSocket")
+        environment("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", colimaSocket)
+        environment("DOCKER_API_VERSION", "1.44")
+    }
 }
 
 kotlin {

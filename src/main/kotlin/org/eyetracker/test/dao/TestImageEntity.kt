@@ -10,4 +10,5 @@ class TestImageEntity(id: EntityID<Int>) : IntEntity(id) {
     var testId by TestImageTable.testId
     var filename by TestImageTable.filename
     var sortOrder by TestImageTable.sortOrder
+    var fixationTrackingArea by TestImageTable.fixationTrackingArea
 }

@@ -9,6 +9,7 @@ data class TestResponse(
     val coverUrl: String,
     val imageUrls: List<String>,
     val imageIds: List<Int>,
+    val fixationTrackingAreas: List<String?>,
     val createdAt: String,
 )
 
@@ -16,6 +17,12 @@ data class TestResponse(
 data class TestListResponse(
     val tests: List<TestResponse>,
 )
+
+@Serializable
+data class UpdateFixationAreaRequest(val fixationTrackingArea: String)
+
+@Serializable
+data class UpdateFixationAreaResponse(val imageId: Int, val fixationTrackingArea: String)
 
 @Serializable
 data class ErrorResponse(val error: String)

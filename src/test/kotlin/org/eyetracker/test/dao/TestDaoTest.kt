@@ -128,4 +128,44 @@ class TestDaoTest : DatabaseTestBase() {
     fun `deleteById returns false when not exists`() {
         assertFalse(testDao.deleteById(99999))
     }
+
+    @Test
+    fun `updateImageFixationArea saves and returns true`() {
+        val created = testDao.create("Test", "cover.jpg", listOf("000.jpg"), userId)
+        val imageId = created.imageIds[0]
+
+        val result = testDao.updateImageFixationArea(imageId, """{"x":10,"y":20,"w":100,"h":50}""")
+        assertTrue(result)
+
+        val found = testDao.findById(created.test.id.value)
+        assertNotNull(found)
+        assertEquals("""{"x":10,"y":20,"w":100,"h":50}""", found.fixationTrackingAreas[0])
+    }
+
+    @Test
+    fun `updateImageFixationArea returns false for nonexistent image`() {
+        val result = testDao.updateImageFixationArea(99999, "area")
+        assertFalse(result)
+    }
+
+    @Test
+    fun `fixationTrackingAreas are null by default`() {
+        val created = testDao.create("Test", "cover.jpg", listOf("000.jpg", "001.jpg"), userId)
+        assertTrue(created.fixationTrackingAreas.all { it == null })
+    }
+
+    @Test
+    fun `findById returns fixationTrackingAreas per image`() {
+        val created = testDao.create("Test", "cover.jpg", listOf("000.jpg", "001.jpg"), userId)
+        val imageId0 = created.imageIds[0]
+        val imageId1 = created.imageIds[1]
+
+        testDao.updateImageFixationArea(imageId0, "area-0")
+        testDao.updateImageFixationArea(imageId1, "area-1")
+
+        val found = testDao.findById(created.test.id.value)
+        assertNotNull(found)
+        assertEquals("area-0", found.fixationTrackingAreas[0])
+        assertEquals("area-1", found.fixationTrackingAreas[1])
+    }
 }

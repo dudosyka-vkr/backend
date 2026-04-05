@@ -239,4 +239,113 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val response = client.get("/records/1")
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
+
+    // ===== roi filter =====
+
+    private suspend fun setRoi(client: io.ktor.client.HttpClient, token: String, imageId: Int, roiJson: String) {
+        client.patch("/tests/images/$imageId/roi") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+            setBody("""{"roi":"${roiJson.replace("\"", "\\\"")}"}""")
+        }
+    }
+
+    private suspend fun createRecordForImage(
+        client: io.ktor.client.HttpClient,
+        token: String,
+        testId: Int,
+        imageId: Int,
+    ): io.ktor.client.statement.HttpResponse {
+        return client.post("/records") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+            setBody("""{"testId":$testId,"startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[{"imageId":$imageId,"metrics":{"placeholderMetric":1.0}}]}""")
+        }
+    }
+
+    @Test
+    fun `list records filtered by roi true returns only matching records`() = testApp { client ->
+        val (token, testData) = setupTestWithImages(client)
+        val (testId, imageIds) = testData
+
+        setRoi(client, token, imageIds[0], """{"hasGaze":true}""")
+        createRecordForImage(client, token, testId, imageIds[0])  // has roi.hasGaze=true → matches
+        createRecordForImage(client, token, testId, imageIds[1])  // no roi → no match
+
+        val response = client.get("/records?roi.hasGaze=true") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(1, body["total"]!!.jsonPrimitive.int)
+    }
+
+    @Test
+    fun `list records filtered by roi false returns only matching records`() = testApp { client ->
+        val (token, testData) = setupTestWithImages(client)
+        val (testId, imageIds) = testData
+
+        setRoi(client, token, imageIds[0], """{"hasGaze":false}""")
+        setRoi(client, token, imageIds[1], """{"hasGaze":true}""")
+        createRecordForImage(client, token, testId, imageIds[0])  // roi.hasGaze=false → matches
+        createRecordForImage(client, token, testId, imageIds[1])  // roi.hasGaze=true  → no match
+
+        val response = client.get("/records?roi.hasGaze=false") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(1, body["total"]!!.jsonPrimitive.int)
+    }
+
+    @Test
+    fun `list records without roi filter returns all`() = testApp { client ->
+        val (token, testData) = setupTestWithImages(client)
+        val (testId, imageIds) = testData
+
+        setRoi(client, token, imageIds[0], """{"hasGaze":true}""")
+        createRecordForImage(client, token, testId, imageIds[0])
+        createRecordForImage(client, token, testId, imageIds[1])
+
+        val response = client.get("/records") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(2, body["total"]!!.jsonPrimitive.int)
+    }
+
+    @Test
+    fun `suggest users filtered by roi returns matching logins`() = testApp { client ->
+        val (token, testData) = setupTestWithImages(client)
+        val (testId, imageIds) = testData
+
+        setRoi(client, token, imageIds[0], """{"hasGaze":true}""")
+        createRecordForImage(client, token, testId, imageIds[0])  // matches
+        createRecordForImage(client, token, testId, imageIds[1])  // no match
+
+        val response = client.get("/records/users/suggest?roi.hasGaze=true") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(1, body["total"]!!.jsonPrimitive.int)
+        assertEquals(TestFixtures.ADMIN_LOGIN, body["items"]!!.jsonArray[0].jsonPrimitive.content)
+    }
+
+    @Test
+    fun `suggest users without roi filter returns all`() = testApp { client ->
+        val (token, testData) = setupTestWithImages(client)
+        val (testId, imageIds) = testData
+
+        createRecordForImage(client, token, testId, imageIds[0])
+        createRecordForImage(client, token, testId, imageIds[1])
+
+        val response = client.get("/records/users/suggest") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(1, body["total"]!!.jsonPrimitive.int)  // same user, deduplicated
+    }
 }

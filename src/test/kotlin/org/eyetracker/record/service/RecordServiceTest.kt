@@ -220,4 +220,93 @@ class RecordServiceTest {
         assertEquals(1, result.items.size)
         assertEquals("alice@test.com", result.items[0])
     }
+
+    // ===== getAll() with roiFilter =====
+
+    @Test
+    fun `getAll with roiFilter returns only records whose images match`() {
+        val record1 = mockRecordEntity(1)
+        val record2 = mockRecordEntity(2)
+        every { recordDao.findAllUnpaginated(null, null, null, null) } returns listOf(record1, record2)
+        every { recordDao.findImageRoisForRecords(any()) } returns mapOf(
+            1 to listOf("""{"hasGaze":true}"""),
+            2 to listOf("""{"hasGaze":false}"""),
+        )
+
+        val result = recordService.getAll(1, 20, null, null, null, null, roiFilter = mapOf("hasGaze" to true))
+        assertEquals(1, result.items.size)
+        assertEquals(1, result.items[0].id)
+        assertEquals(1, result.total)
+    }
+
+    @Test
+    fun `getAll with roiFilter excludes records with null roi`() {
+        val record1 = mockRecordEntity(1)
+        every { recordDao.findAllUnpaginated(null, null, null, null) } returns listOf(record1)
+        every { recordDao.findImageRoisForRecords(any()) } returns mapOf(1 to listOf(null))
+
+        val result = recordService.getAll(1, 20, null, null, null, null, roiFilter = mapOf("hasGaze" to true))
+        assertEquals(0, result.items.size)
+        assertEquals(0, result.total)
+    }
+
+    @Test
+    fun `getAll with roiFilter paginates correctly`() {
+        val records = (1..5).map { mockRecordEntity(it) }
+        every { recordDao.findAllUnpaginated(null, null, null, null) } returns records
+        every { recordDao.findImageRoisForRecords(any()) } returns
+            records.associate { it.id.value to listOf("""{"hasGaze":true}""") }
+
+        val result = recordService.getAll(1, 2, null, null, null, null, roiFilter = mapOf("hasGaze" to true))
+        assertEquals(2, result.items.size)
+        assertEquals(5, result.total)
+        assertEquals(2, result.pageSize)
+    }
+
+    @Test
+    fun `getAll with empty roiFilter uses normal dao path`() {
+        every { recordDao.findAll(1, 20, null, null, null, null) } returns Pair(emptyList(), 0L)
+        val result = recordService.getAll(1, 20, null, null, null, null, roiFilter = emptyMap())
+        assertEquals(0, result.items.size)
+    }
+
+    // ===== suggestUsers() with roiFilter =====
+
+    @Test
+    fun `suggestUsers with roiFilter returns logins for matching records`() {
+        val record1 = mockRecordEntity(1, userLogin = "alice@test.com")
+        val record2 = mockRecordEntity(2, userLogin = "bob@test.com")
+        every { recordDao.findAllUnpaginated(null, null, null, null) } returns listOf(record1, record2)
+        every { recordDao.findImageRoisForRecords(any()) } returns mapOf(
+            1 to listOf("""{"hasGaze":true}"""),
+            2 to listOf("""{"hasGaze":false}"""),
+        )
+
+        val result = recordService.suggestUsers(1, 20, null, null, null, roiFilter = mapOf("hasGaze" to true))
+        assertEquals(1, result.items.size)
+        assertEquals("alice@test.com", result.items[0])
+        assertEquals(1, result.total)
+    }
+
+    @Test
+    fun `suggestUsers with roiFilter deduplicates logins`() {
+        val record1 = mockRecordEntity(1, userLogin = "alice@test.com")
+        val record2 = mockRecordEntity(2, userLogin = "alice@test.com")
+        every { recordDao.findAllUnpaginated(null, null, null, null) } returns listOf(record1, record2)
+        every { recordDao.findImageRoisForRecords(any()) } returns mapOf(
+            1 to listOf("""{"hasGaze":true}"""),
+            2 to listOf("""{"hasGaze":true}"""),
+        )
+
+        val result = recordService.suggestUsers(1, 20, null, null, null, roiFilter = mapOf("hasGaze" to true))
+        assertEquals(1, result.items.size)
+        assertEquals(1, result.total)
+    }
+
+    @Test
+    fun `suggestUsers with empty roiFilter uses normal dao path`() {
+        every { recordDao.suggestUsers(1, 20, null, null, null) } returns Pair(listOf("alice@test.com"), 1L)
+        val result = recordService.suggestUsers(1, 20, null, null, null, roiFilter = emptyMap())
+        assertEquals(1, result.items.size)
+    }
 }

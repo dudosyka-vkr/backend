@@ -35,8 +35,11 @@ fun Route.recordRoutes(recordService: RecordService) {
                 val userLogin = call.request.queryParameters["userLogin"]
                 val from = call.request.queryParameters["from"]
                 val to = call.request.queryParameters["to"]
+                val roiFilter = call.request.queryParameters.entries()
+                    .filter { it.key.startsWith("roi.") }
+                    .associate { it.key.removePrefix("roi.") to (it.value.firstOrNull() == "true") }
 
-                call.respond(recordService.getAll(page, pageSize, testId, userLogin, from, to))
+                call.respond(recordService.getAll(page, pageSize, testId, userLogin, from, to, roiFilter))
             }
 
             get("/users/suggest") {
@@ -45,8 +48,11 @@ fun Route.recordRoutes(recordService: RecordService) {
                 val testId = call.request.queryParameters["testId"]?.toIntOrNull()
                 val from = call.request.queryParameters["from"]
                 val to = call.request.queryParameters["to"]
+                val roiFilter = call.request.queryParameters.entries()
+                    .filter { it.key.startsWith("roi.") }
+                    .associate { it.key.removePrefix("roi.") to (it.value.firstOrNull() == "true") }
 
-                call.respond(recordService.suggestUsers(page, pageSize, testId, from, to))
+                call.respond(recordService.suggestUsers(page, pageSize, testId, from, to, roiFilter))
             }
 
             get("/{id}") {

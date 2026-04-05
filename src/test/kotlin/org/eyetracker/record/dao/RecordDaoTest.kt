@@ -201,4 +201,81 @@ class RecordDaoTest : DatabaseTestBase() {
         assertTrue(records.isEmpty())
         assertEquals(0L, total)
     }
+
+    // ===== findAllUnpaginated() =====
+
+    @Test
+    fun `findAllUnpaginated returns all matching records`() {
+        repeat(5) { createDefaultRecord(userLogin = "user$it@test.com") }
+        val records = recordDao.findAllUnpaginated(null, null, null, null)
+        assertEquals(5, records.size)
+    }
+
+    @Test
+    fun `findAllUnpaginated filters by userLogin`() {
+        createDefaultRecord(userLogin = "alice@test.com")
+        createDefaultRecord(userLogin = "bob@test.com")
+        val records = recordDao.findAllUnpaginated(null, "alice@test.com", null, null)
+        assertEquals(1, records.size)
+        assertEquals("alice@test.com", records[0].userLogin)
+    }
+
+    @Test
+    fun `findAllUnpaginated filters by testId`() {
+        val user2 = userDao.createUser("owner2@test.com", "hashed_pw")
+        val twi2 = testDao.create("Test2", "cover2.jpg", listOf("000.jpg"), user2.id.value)
+        val testId2 = twi2.test.id.value
+        val imageIds2 = twi2.imageIds
+        createDefaultRecord()
+        val items2 = imageIds2.map { CreateRecordItemData(it, RecordItemMetrics(1.0)) }
+        recordDao.create(testId2, "user@test.com", startedAt, finishedAt, 100, items2)
+
+        val records = recordDao.findAllUnpaginated(testId, null, null, null)
+        assertEquals(1, records.size)
+        assertEquals(testId, records[0].testId)
+    }
+
+    @Test
+    fun `findAllUnpaginated returns empty when no matches`() {
+        val records = recordDao.findAllUnpaginated(99999, null, null, null)
+        assertTrue(records.isEmpty())
+    }
+
+    // ===== findImageRoisForRecords() =====
+
+    @Test
+    fun `findImageRoisForRecords returns empty map for empty input`() {
+        val rois = recordDao.findImageRoisForRecords(emptyList())
+        assertTrue(rois.isEmpty())
+    }
+
+    @Test
+    fun `findImageRoisForRecords returns null rois when not set`() {
+        val record = createDefaultRecord()
+        val rois = recordDao.findImageRoisForRecords(listOf(record.record.id.value))
+        val recordRois = rois[record.record.id.value]
+        assertNotNull(recordRois)
+        assertTrue(recordRois.all { it == null })
+    }
+
+    @Test
+    fun `findImageRoisForRecords returns roi value when set`() {
+        testDao.updateImageRoi(imageIds[0], """{"hasGaze":true}""")
+        val record = createDefaultRecord()
+        val rois = recordDao.findImageRoisForRecords(listOf(record.record.id.value))
+        val recordRois = rois[record.record.id.value]
+        assertNotNull(recordRois)
+        assertTrue(recordRois.any { it == """{"hasGaze":true}""" })
+    }
+
+    @Test
+    fun `findImageRoisForRecords groups rois by record`() {
+        testDao.updateImageRoi(imageIds[0], """{"hasGaze":true}""")
+        val record1 = createDefaultRecord(userLogin = "a@test.com")
+        val record2 = createDefaultRecord(userLogin = "b@test.com")
+        val rois = recordDao.findImageRoisForRecords(listOf(record1.record.id.value, record2.record.id.value))
+        assertEquals(2, rois.size)
+        assertTrue(rois[record1.record.id.value]!!.any { it == """{"hasGaze":true}""" })
+        assertTrue(rois[record2.record.id.value]!!.any { it == """{"hasGaze":true}""" })
+    }
 }

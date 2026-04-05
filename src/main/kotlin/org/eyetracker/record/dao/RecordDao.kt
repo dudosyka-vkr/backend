@@ -5,11 +5,12 @@ import kotlinx.datetime.Instant
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.eyetracker.record.dto.RecordItemMetrics
+import org.eyetracker.test.dao.TestImageTable
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.andWhere
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.Slice
 import org.jetbrains.exposed.sql.select
 
 data class CreateRecordItemData(val imageId: Int, val metrics: RecordItemMetrics)
@@ -90,6 +91,30 @@ class RecordDao {
             .offset(((page - 1) * pageSize).toLong())
         val records = RecordEntity.wrapRows(query).toList()
         Pair(records, total)
+    }
+
+    fun findAllUnpaginated(
+        testId: Int?,
+        userLogin: String?,
+        from: Instant?,
+        to: Instant?,
+    ): List<RecordEntity> = transaction {
+        val query = RecordTable.selectAll()
+        if (testId != null) query.andWhere { RecordTable.testId eq testId }
+        if (!userLogin.isNullOrBlank()) query.andWhere { RecordTable.userLogin eq userLogin }
+        if (from != null) query.andWhere { RecordTable.startedAt greaterEq from }
+        if (to != null) query.andWhere { RecordTable.startedAt lessEq to }
+        query.orderBy(RecordTable.id, SortOrder.DESC)
+        RecordEntity.wrapRows(query).toList()
+    }
+
+    fun findImageRoisForRecords(recordIds: List<Int>): Map<Int, List<String?>> = transaction {
+        if (recordIds.isEmpty()) return@transaction emptyMap()
+        (RecordItemTable innerJoin TestImageTable)
+            .select(RecordItemTable.recordId, TestImageTable.roi)
+            .where { RecordItemTable.recordId inList recordIds }
+            .groupBy { it[RecordItemTable.recordId] }
+            .mapValues { (_, rows) -> rows.map { it[TestImageTable.roi] } }
     }
 
     fun suggestUsers(

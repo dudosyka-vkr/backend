@@ -1,6 +1,9 @@
 package org.eyetracker.record.service
 
 import kotlinx.datetime.Instant
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.eyetracker.record.dao.CreateRecordItemData
 import org.eyetracker.record.dao.RecordDao
 import org.eyetracker.record.dao.RecordEntity
@@ -70,12 +73,29 @@ class RecordService(
         userLogin: String?,
         from: String?,
         to: String?,
+        roiFilter: Map<String, Boolean> = emptyMap(),
     ): RecordListResponse {
         val clampedPage = maxOf(page, 1)
         val clampedPageSize = pageSize.coerceIn(1, 100)
 
         val fromInstant = from?.let { runCatching { Instant.parse(it) }.getOrNull() }
         val toInstant = to?.let { runCatching { Instant.parse(it) }.getOrNull() }
+
+        if (roiFilter.isNotEmpty()) {
+            val allRecords = recordDao.findAllUnpaginated(testId, userLogin, fromInstant, toInstant)
+            val roisByRecord = recordDao.findImageRoisForRecords(allRecords.map { it.id.value })
+            val filtered = allRecords.filter { record ->
+                roisByRecord[record.id.value].orEmpty().any { roi -> roiMatchesFilter(roi, roiFilter) }
+            }
+            val total = filtered.size
+            val page_records = filtered.drop((clampedPage - 1) * clampedPageSize).take(clampedPageSize)
+            return RecordListResponse(
+                items = page_records.map { toSummaryResponse(it) },
+                page = clampedPage,
+                pageSize = clampedPageSize,
+                total = total,
+            )
+        }
 
         val (records, total) = recordDao.findAll(clampedPage, clampedPageSize, testId, userLogin, fromInstant, toInstant)
         return RecordListResponse(
@@ -92,12 +112,30 @@ class RecordService(
         testId: Int?,
         from: String?,
         to: String?,
+        roiFilter: Map<String, Boolean> = emptyMap(),
     ): UserSuggestResponse {
         val clampedPage = maxOf(page, 1)
         val clampedPageSize = pageSize.coerceIn(1, 100)
 
         val fromInstant = from?.let { runCatching { Instant.parse(it) }.getOrNull() }
         val toInstant = to?.let { runCatching { Instant.parse(it) }.getOrNull() }
+
+        if (roiFilter.isNotEmpty()) {
+            val allRecords = recordDao.findAllUnpaginated(testId, null, fromInstant, toInstant)
+            val roisByRecord = recordDao.findImageRoisForRecords(allRecords.map { it.id.value })
+            val filtered = allRecords.filter { record ->
+                roisByRecord[record.id.value].orEmpty().any { roi -> roiMatchesFilter(roi, roiFilter) }
+            }
+            val logins = filtered.map { it.userLogin }.distinct().sorted()
+            val total = logins.size
+            val page_logins = logins.drop((clampedPage - 1) * clampedPageSize).take(clampedPageSize)
+            return UserSuggestResponse(
+                items = page_logins,
+                page = clampedPage,
+                pageSize = clampedPageSize,
+                total = total,
+            )
+        }
 
         val (logins, total) = recordDao.suggestUsers(clampedPage, clampedPageSize, testId, fromInstant, toInstant)
         return UserSuggestResponse(
@@ -106,6 +144,16 @@ class RecordService(
             pageSize = clampedPageSize,
             total = total.toInt(),
         )
+    }
+
+    private fun roiMatchesFilter(roiJson: String?, filter: Map<String, Boolean>): Boolean {
+        if (roiJson == null) return false
+        return try {
+            val obj = Json.parseToJsonElement(roiJson).jsonObject
+            filter.all { (key, value) -> runCatching { obj[key]?.jsonPrimitive?.content?.toBooleanStrictOrNull() }.getOrNull() == value }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun toDetailResponse(rwi: RecordWithItems): RecordDetailResponse {

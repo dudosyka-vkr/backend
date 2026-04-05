@@ -97,6 +97,7 @@ curl -X POST http://localhost:8080/tests \
   "coverUrl": "/tests/1/cover",
   "imageUrls": ["/tests/1/images/0", "/tests/1/images/1"],
   "imageIds": [1, 2],
+  "rois": [null, null],
   "createdAt": "2025-01-15T12:00:00Z"
 }
 ```
@@ -113,6 +114,25 @@ curl -X PUT http://localhost:8080/tests/1 \
 
 Ответ `200`: аналогичен созданию. Ответ `404` если тест не найден.
 
+### Обновить ROI изображения (ADMIN+)
+
+```bash
+curl -X PATCH http://localhost:8080/tests/images/1/roi \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <admin_token>" \
+  -d '{"roi":"{\"x\":10,\"y\":20,\"w\":100,\"h\":50}"}'
+```
+
+Ответ `200`:
+```json
+{"imageId": 1, "roi": "{\"x\":10,\"y\":20,\"w\":100,\"h\":50}"}
+```
+
+Ответ `404` (изображение не найдено):
+```json
+{"error": "Image not found"}
+```
+
 ### Список тестов
 
 ```bash
@@ -122,7 +142,7 @@ curl http://localhost:8080/tests \
 
 Ответ `200`:
 ```json
-{"tests":[{"id":1,"name":"My Test","coverUrl":"/tests/1/cover","imageUrls":["/tests/1/images/0"],"imageIds":[1],"createdAt":"..."}]}
+{"tests":[{"id":1,"name":"My Test","coverUrl":"/tests/1/cover","imageUrls":["/tests/1/images/0"],"imageIds":[1],"rois":[null],"createdAt":"..."}]}
 ```
 
 ### Получить тест по ID
@@ -207,7 +227,7 @@ curl -X POST http://localhost:8080/records \
 ### Список прохождений (с пагинацией и фильтрами)
 
 ```bash
-curl "http://localhost:8080/records?page=1&pageSize=20&userLogin=student@example.com&from=2025-01-01T00:00:00Z&to=2025-12-31T23:59:59Z" \
+curl "http://localhost:8080/records?page=1&pageSize=20&testId=1&userLogin=student@example.com&from=2025-01-01T00:00:00Z&to=2025-12-31T23:59:59Z" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -228,6 +248,23 @@ curl "http://localhost:8080/records?page=1&pageSize=20&userLogin=student@example
   "page": 1,
   "pageSize": 20,
   "total": 1
+}
+```
+
+### Список уникальных участников (suggest)
+
+```bash
+curl "http://localhost:8080/records/users/suggest?page=1&pageSize=20&testId=1" \
+  -H "Authorization: Bearer <token>"
+```
+
+Ответ `200`:
+```json
+{
+  "items": ["student@example.com", "another@example.com"],
+  "page": 1,
+  "pageSize": 20,
+  "total": 2
 }
 ```
 

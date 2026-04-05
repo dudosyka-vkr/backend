@@ -33,10 +33,10 @@ make local
 
 ## Тестирование
 
-Требуется Docker (для Testcontainers — поднимает PostgreSQL автоматически).
+Требуется запущенный PostgreSQL (`cd deploy && docker-compose up -d postgres`).
 
 ```bash
-# Запустить все тесты (153 теста)
+# Запустить все тесты (174 теста)
 make test
 
 # Только unit-тесты (сервисы + DAO)
@@ -46,7 +46,7 @@ make test-unit
 make test-integration
 ```
 
-Тесты используют Testcontainers с реальным PostgreSQL, MockK для моков в unit-тестах сервисов, и Ktor `testApplication` для интеграционных тестов.
+Тесты используют прямое подключение к PostgreSQL, MockK для моков в unit-тестах сервисов, и Ktor `testApplication` для интеграционных тестов.
 
 ## Конфигурация
 

@@ -8,7 +8,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.eyetracker.test.dto.ErrorResponse
-import org.eyetracker.test.dto.UpdateFixationAreaRequest
+import org.eyetracker.test.dto.UpdateRoiRequest
 import org.eyetracker.test.service.TestResult
 import org.eyetracker.test.service.TestService
 import io.ktor.utils.io.*
@@ -159,14 +159,14 @@ fun Route.testRoutes(testService: TestService) {
                 }
             }
 
-            patch("/images/{id}/fixation-area") {
+            patch("/images/{id}/roi") {
                 if (!call.requireAdmin()) return@patch
 
                 val imageId = call.parameters["id"]?.toIntOrNull()
                     ?: return@patch call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid image ID"))
 
-                val body = call.receive<UpdateFixationAreaRequest>()
-                val result = testService.updateImageFixationArea(imageId, body.fixationTrackingArea)
+                val body = call.receive<UpdateRoiRequest>()
+                val result = testService.updateImageRoi(imageId, body.roi)
                     ?: return@patch call.respond(HttpStatusCode.NotFound, ErrorResponse("Image not found"))
 
                 call.respond(HttpStatusCode.OK, result)

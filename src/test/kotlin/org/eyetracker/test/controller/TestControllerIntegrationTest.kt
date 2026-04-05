@@ -461,30 +461,30 @@ class TestControllerIntegrationTest : IntegrationTestBase() {
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
-    // ===== PATCH /tests/images/{id}/fixation-area =====
+    // ===== PATCH /tests/images/{id}/roi =====
 
     @Test
-    fun `admin updates fixation area returns 200 with saved value`() = testApp { client ->
+    fun `admin updates roi returns 200 with saved value`() = testApp { client ->
         val token = getAdminToken(client)
         val createResponse = createTestViaApi(client, token, "ROI Test")
         val created = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject
         val testId = created["id"]!!.jsonPrimitive.int
         val imageId = created["imageIds"]!!.jsonArray[0].jsonPrimitive.int
 
-        val response = client.patch("/tests/images/$imageId/fixation-area") {
+        val response = client.patch("/tests/images/$imageId/roi") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
-            setBody("""{"fixationTrackingArea":"{\"x\":10,\"y\":20,\"w\":100,\"h\":50}"}""")
+            setBody("""{"roi":"{\"x\":10,\"y\":20,\"w\":100,\"h\":50}"}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
 
         val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
         assertEquals(imageId, body["imageId"]!!.jsonPrimitive.int)
-        assertEquals("""{"x":10,"y":20,"w":100,"h":50}""", body["fixationTrackingArea"]!!.jsonPrimitive.content)
+        assertEquals("""{"x":10,"y":20,"w":100,"h":50}""", body["roi"]!!.jsonPrimitive.content)
     }
 
     @Test
-    fun `fixation area is returned in test response after update`() = testApp { client ->
+    fun `roi is returned in test response after update`() = testApp { client ->
         val token = getAdminToken(client)
         val createResponse = createTestViaApi(client, token, "ROI Test")
         val created = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject
@@ -492,14 +492,14 @@ class TestControllerIntegrationTest : IntegrationTestBase() {
         val imageId = created["imageIds"]!!.jsonArray[0].jsonPrimitive.int
 
         // Initially all areas are null
-        val areas = created["fixationTrackingAreas"]!!.jsonArray
+        val areas = created["rois"]!!.jsonArray
         assertTrue(areas.all { it is JsonNull })
 
-        // Set fixation area for image 0
-        client.patch("/tests/images/$imageId/fixation-area") {
+        // Set roi for image 0
+        client.patch("/tests/images/$imageId/roi") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
-            setBody("""{"fixationTrackingArea":"my-roi"}""")
+            setBody("""{"roi":"my-roi"}""")
         }
 
         // Fetch test and verify area is returned
@@ -507,52 +507,52 @@ class TestControllerIntegrationTest : IntegrationTestBase() {
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
         }
         val body = Json.parseToJsonElement(getResponse.bodyAsText()).jsonObject
-        assertEquals("my-roi", body["fixationTrackingAreas"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("my-roi", body["rois"]!!.jsonArray[0].jsonPrimitive.content)
     }
 
     @Test
-    fun `update fixation area for nonexistent image returns 404`() = testApp { client ->
+    fun `update roi for nonexistent image returns 404`() = testApp { client ->
         val token = getAdminToken(client)
-        val response = client.patch("/tests/images/99999/fixation-area") {
+        val response = client.patch("/tests/images/99999/roi") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
-            setBody("""{"fixationTrackingArea":"data"}""")
+            setBody("""{"roi":"data"}""")
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
     @Test
-    fun `user cannot update fixation area returns 403`() = testApp { client ->
+    fun `user cannot update roi returns 403`() = testApp { client ->
         val adminToken = getAdminToken(client)
         val createResponse = createTestViaApi(client, adminToken)
         val created = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject
         val imageId = created["imageIds"]!!.jsonArray[0].jsonPrimitive.int
 
         val userToken = registerUser(client)
-        val response = client.patch("/tests/images/$imageId/fixation-area") {
+        val response = client.patch("/tests/images/$imageId/roi") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, TestFixtures.authHeader(userToken))
-            setBody("""{"fixationTrackingArea":"data"}""")
+            setBody("""{"roi":"data"}""")
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
     @Test
-    fun `update fixation area without auth returns 401`() = testApp { client ->
-        val response = client.patch("/tests/images/1/fixation-area") {
+    fun `update roi without auth returns 401`() = testApp { client ->
+        val response = client.patch("/tests/images/1/roi") {
             contentType(ContentType.Application.Json)
-            setBody("""{"fixationTrackingArea":"data"}""")
+            setBody("""{"roi":"data"}""")
         }
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
     @Test
-    fun `update fixation area with invalid id returns 400`() = testApp { client ->
+    fun `update roi with invalid id returns 400`() = testApp { client ->
         val token = getAdminToken(client)
-        val response = client.patch("/tests/images/abc/fixation-area") {
+        val response = client.patch("/tests/images/abc/roi") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
-            setBody("""{"fixationTrackingArea":"data"}""")
+            setBody("""{"roi":"data"}""")
         }
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }

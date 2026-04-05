@@ -4,7 +4,7 @@ import org.eyetracker.test.dao.TestDao
 import org.eyetracker.test.dao.TestWithImages
 import org.eyetracker.test.dto.TestListResponse
 import org.eyetracker.test.dto.TestResponse
-import org.eyetracker.test.dto.UpdateFixationAreaResponse
+import org.eyetracker.test.dto.UpdateRoiResponse
 import java.io.File
 import java.io.InputStream
 
@@ -143,10 +143,10 @@ class TestService(
         return TestResult.Success(toResponse(testWithImages))
     }
 
-    fun updateImageFixationArea(imageId: Int, fixationTrackingArea: String): UpdateFixationAreaResponse? {
-        val updated = testDao.updateImageFixationArea(imageId, fixationTrackingArea)
+    fun updateImageRoi(imageId: Int, roi: String): UpdateRoiResponse? {
+        val updated = testDao.updateImageRoi(imageId, roi)
         if (!updated) return null
-        return UpdateFixationAreaResponse(imageId, fixationTrackingArea)
+        return UpdateRoiResponse(imageId, roi)
     }
 
     fun getCoverFile(testId: Int): File? {
@@ -171,7 +171,7 @@ class TestService(
             coverUrl = "/tests/$testId/cover",
             imageUrls = testWithImages.imageFilenames.indices.map { "/tests/$testId/images/$it" },
             imageIds = testWithImages.imageIds,
-            fixationTrackingAreas = testWithImages.fixationTrackingAreas,
+            rois = testWithImages.rois,
             createdAt = testWithImages.test.createdAt.toString(),
         )
     }

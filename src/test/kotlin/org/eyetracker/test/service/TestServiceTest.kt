@@ -56,10 +56,10 @@ class TestServiceTest {
         coverFilename: String,
         imageFilenames: List<String>,
         userId: Int = 1,
-        fixationTrackingAreas: List<String?> = imageFilenames.map { null },
+        rois: List<String?> = imageFilenames.map { null },
     ): TestWithImages {
         val ids = imageFilenames.indices.map { id * 100 + it }
-        return TestWithImages(mockTestEntity(id, name, coverFilename, userId), imageFilenames, ids, fixationTrackingAreas)
+        return TestWithImages(mockTestEntity(id, name, coverFilename, userId), imageFilenames, ids, rois)
     }
 
     private fun dummyStream(content: String = "data"): InputStream = ByteArrayInputStream(content.toByteArray())
@@ -353,23 +353,23 @@ class TestServiceTest {
         assertNull(testService.getImageFile(1, 0))
     }
 
-    // ===== updateImageFixationArea() =====
+    // ===== updateImageRoi() =====
 
     @Test
-    fun `updateImageFixationArea returns response when image exists`() {
-        every { testDao.updateImageFixationArea(5, "roi-data") } returns true
+    fun `updateImageRoi returns response when image exists`() {
+        every { testDao.updateImageRoi(5, "roi-data") } returns true
 
-        val result = testService.updateImageFixationArea(5, "roi-data")
+        val result = testService.updateImageRoi(5, "roi-data")
         assertNotNull(result)
         assertEquals(5, result.imageId)
-        assertEquals("roi-data", result.fixationTrackingArea)
+        assertEquals("roi-data", result.roi)
     }
 
     @Test
-    fun `updateImageFixationArea returns null when image not found`() {
-        every { testDao.updateImageFixationArea(99, any()) } returns false
+    fun `updateImageRoi returns null when image not found`() {
+        every { testDao.updateImageRoi(99, any()) } returns false
 
-        val result = testService.updateImageFixationArea(99, "roi-data")
+        val result = testService.updateImageRoi(99, "roi-data")
         assertNull(result)
     }
 }

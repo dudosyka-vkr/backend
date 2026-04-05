@@ -10,7 +10,7 @@ data class TestWithImages(
     val test: TestEntity,
     val imageFilenames: List<String>,
     val imageIds: List<Int> = emptyList(),
-    val fixationTrackingAreas: List<String?> = emptyList(),
+    val rois: List<String?> = emptyList(),
 )
 
 class TestDao {
@@ -33,7 +33,7 @@ class TestDao {
                 this.sortOrder = index
             }
         }
-        TestWithImages(test, imageFilenames, images.map { it.id.value }, images.map { it.fixationTrackingArea })
+        TestWithImages(test, imageFilenames, images.map { it.id.value }, images.map { it.roi })
     }
 
     fun findAll(): List<TestWithImages> = transaction {
@@ -46,7 +46,7 @@ class TestDao {
                 test,
                 imageEntities.map { it.filename },
                 imageEntities.map { it.id.value },
-                imageEntities.map { it.fixationTrackingArea },
+                imageEntities.map { it.roi },
             )
         }
     }
@@ -60,7 +60,7 @@ class TestDao {
             test,
             imageEntities.map { it.filename },
             imageEntities.map { it.id.value },
-            imageEntities.map { it.fixationTrackingArea },
+            imageEntities.map { it.roi },
         )
     }
 
@@ -81,7 +81,7 @@ class TestDao {
                 this.sortOrder = index
             }
         }
-        TestWithImages(test, imageFilenames, images.map { it.id.value }, images.map { it.fixationTrackingArea })
+        TestWithImages(test, imageFilenames, images.map { it.id.value }, images.map { it.roi })
     }
 
     fun findImageIdsByTestId(testId: Int): List<Int> = transaction {
@@ -90,9 +90,9 @@ class TestDao {
             .map { it.id.value }
     }
 
-    fun updateImageFixationArea(imageId: Int, fixationTrackingArea: String): Boolean = transaction {
+    fun updateImageRoi(imageId: Int, roi: String): Boolean = transaction {
         val image = TestImageEntity.findById(imageId) ?: return@transaction false
-        image.fixationTrackingArea = fixationTrackingArea
+        image.roi = roi
         true
     }
 

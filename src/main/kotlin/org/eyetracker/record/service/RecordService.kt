@@ -10,6 +10,7 @@ import org.eyetracker.record.dto.RecordDetailResponse
 import org.eyetracker.record.dto.RecordItemResponse
 import org.eyetracker.record.dto.RecordListResponse
 import org.eyetracker.record.dto.RecordSummaryResponse
+import org.eyetracker.record.dto.UserSuggestResponse
 import org.eyetracker.test.dao.TestDao
 
 sealed class RecordResult {
@@ -65,6 +66,7 @@ class RecordService(
     fun getAll(
         page: Int,
         pageSize: Int,
+        testId: Int?,
         userLogin: String?,
         from: String?,
         to: String?,
@@ -75,9 +77,31 @@ class RecordService(
         val fromInstant = from?.let { runCatching { Instant.parse(it) }.getOrNull() }
         val toInstant = to?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
-        val (records, total) = recordDao.findAll(clampedPage, clampedPageSize, userLogin, fromInstant, toInstant)
+        val (records, total) = recordDao.findAll(clampedPage, clampedPageSize, testId, userLogin, fromInstant, toInstant)
         return RecordListResponse(
             items = records.map { toSummaryResponse(it) },
+            page = clampedPage,
+            pageSize = clampedPageSize,
+            total = total.toInt(),
+        )
+    }
+
+    fun suggestUsers(
+        page: Int,
+        pageSize: Int,
+        testId: Int?,
+        from: String?,
+        to: String?,
+    ): UserSuggestResponse {
+        val clampedPage = maxOf(page, 1)
+        val clampedPageSize = pageSize.coerceIn(1, 100)
+
+        val fromInstant = from?.let { runCatching { Instant.parse(it) }.getOrNull() }
+        val toInstant = to?.let { runCatching { Instant.parse(it) }.getOrNull() }
+
+        val (logins, total) = recordDao.suggestUsers(clampedPage, clampedPageSize, testId, fromInstant, toInstant)
+        return UserSuggestResponse(
+            items = logins,
             page = clampedPage,
             pageSize = clampedPageSize,
             total = total.toInt(),

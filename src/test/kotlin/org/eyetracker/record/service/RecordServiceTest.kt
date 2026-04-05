@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class RecordServiceTest {
 
@@ -160,9 +161,9 @@ class RecordServiceTest {
     @Test
     fun `getAll returns paginated response`() {
         val records = listOf(mockRecordEntity(1), mockRecordEntity(2))
-        every { recordDao.findAll(1, 20, null, null, null) } returns Pair(records, 5L)
+        every { recordDao.findAll(1, 20, null, null, null, null) } returns Pair(records, 5L)
 
-        val result = recordService.getAll(1, 20, null, null, null)
+        val result = recordService.getAll(1, 20, null, null, null, null)
         assertEquals(2, result.items.size)
         assertEquals(1, result.page)
         assertEquals(20, result.pageSize)
@@ -171,15 +172,52 @@ class RecordServiceTest {
 
     @Test
     fun `getAll clamps pageSize to max 100`() {
-        every { recordDao.findAll(1, 100, null, null, null) } returns Pair(emptyList(), 0L)
-        val result = recordService.getAll(1, 500, null, null, null)
+        every { recordDao.findAll(1, 100, null, null, null, null) } returns Pair(emptyList(), 0L)
+        val result = recordService.getAll(1, 500, null, null, null, null)
         assertEquals(100, result.pageSize)
     }
 
     @Test
     fun `getAll clamps page to min 1`() {
-        every { recordDao.findAll(1, 20, null, null, null) } returns Pair(emptyList(), 0L)
-        val result = recordService.getAll(-5, 20, null, null, null)
+        every { recordDao.findAll(1, 20, null, null, null, null) } returns Pair(emptyList(), 0L)
+        val result = recordService.getAll(-5, 20, null, null, null, null)
         assertEquals(1, result.page)
+    }
+
+    @Test
+    fun `getAll filters by testId`() {
+        val records = listOf(mockRecordEntity(1, testId = 42))
+        every { recordDao.findAll(1, 20, 42, null, null, null) } returns Pair(records, 1L)
+
+        val result = recordService.getAll(1, 20, 42, null, null, null)
+        assertEquals(1, result.items.size)
+        assertEquals(42, result.items[0].testId)
+    }
+
+    // ===== suggestUsers() =====
+
+    @Test
+    fun `suggestUsers returns distinct logins`() {
+        every { recordDao.suggestUsers(1, 20, null, null, null) } returns Pair(listOf("alice@test.com", "bob@test.com"), 2L)
+
+        val result = recordService.suggestUsers(1, 20, null, null, null)
+        assertEquals(2, result.items.size)
+        assertEquals(2, result.total)
+        assertTrue(result.items.contains("alice@test.com"))
+    }
+
+    @Test
+    fun `suggestUsers clamps pageSize`() {
+        every { recordDao.suggestUsers(1, 100, null, null, null) } returns Pair(emptyList(), 0L)
+        val result = recordService.suggestUsers(1, 999, null, null, null)
+        assertEquals(100, result.pageSize)
+    }
+
+    @Test
+    fun `suggestUsers filters by testId`() {
+        every { recordDao.suggestUsers(1, 20, 5, null, null) } returns Pair(listOf("alice@test.com"), 1L)
+        val result = recordService.suggestUsers(1, 20, 5, null, null)
+        assertEquals(1, result.items.size)
+        assertEquals("alice@test.com", result.items[0])
     }
 }

@@ -59,4 +59,12 @@ data class RecordListResponse(
 )
 
 @Serializable
+data class UserSuggestResponse(
+    val items: List<String>,
+    val page: Int,
+    val pageSize: Int,
+    val total: Int,
+)
+
+@Serializable
 data class ErrorResponse(val error: String)

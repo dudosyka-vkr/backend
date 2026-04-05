@@ -75,7 +75,7 @@ class RecordDaoTest : DatabaseTestBase() {
     @Test
     fun `findAll returns paginated results`() {
         repeat(5) { createDefaultRecord(userLogin = "user$it@test.com") }
-        val (records, total) = recordDao.findAll(1, 2, null, null, null)
+        val (records, total) = recordDao.findAll(1, 2, null, null, null, null)
         assertEquals(2, records.size)
         assertEquals(5L, total)
     }
@@ -83,7 +83,7 @@ class RecordDaoTest : DatabaseTestBase() {
     @Test
     fun `findAll page 2 returns correct offset`() {
         repeat(5) { createDefaultRecord(userLogin = "user$it@test.com") }
-        val (records, total) = recordDao.findAll(2, 2, null, null, null)
+        val (records, total) = recordDao.findAll(2, 2, null, null, null, null)
         assertEquals(2, records.size)
         assertEquals(5L, total)
     }
@@ -93,7 +93,7 @@ class RecordDaoTest : DatabaseTestBase() {
         createDefaultRecord(userLogin = "alice@test.com")
         createDefaultRecord(userLogin = "bob@test.com")
         createDefaultRecord(userLogin = "alice@test.com")
-        val (records, total) = recordDao.findAll(1, 10, "alice@test.com", null, null)
+        val (records, total) = recordDao.findAll(1, 10, null, "alice@test.com", null, null)
         assertEquals(2, records.size)
         assertEquals(2L, total)
     }
@@ -102,7 +102,7 @@ class RecordDaoTest : DatabaseTestBase() {
     fun `findAll filters by from timestamp`() {
         createDefaultRecord(started = Instant.parse("2025-01-01T08:00:00Z"))
         createDefaultRecord(started = Instant.parse("2025-01-01T12:00:00Z"))
-        val (records, total) = recordDao.findAll(1, 10, null, Instant.parse("2025-01-01T10:00:00Z"), null)
+        val (records, total) = recordDao.findAll(1, 10, null, null, Instant.parse("2025-01-01T10:00:00Z"), null)
         assertEquals(1, records.size)
         assertEquals(1L, total)
     }
@@ -111,7 +111,7 @@ class RecordDaoTest : DatabaseTestBase() {
     fun `findAll filters by to timestamp`() {
         createDefaultRecord(started = Instant.parse("2025-01-01T08:00:00Z"))
         createDefaultRecord(started = Instant.parse("2025-01-01T12:00:00Z"))
-        val (records, total) = recordDao.findAll(1, 10, null, null, Instant.parse("2025-01-01T09:00:00Z"))
+        val (records, total) = recordDao.findAll(1, 10, null, null, null, Instant.parse("2025-01-01T09:00:00Z"))
         assertEquals(1, records.size)
         assertEquals(1L, total)
     }
@@ -122,7 +122,7 @@ class RecordDaoTest : DatabaseTestBase() {
         createDefaultRecord(userLogin = "alice@test.com", started = Instant.parse("2025-01-01T12:00:00Z"))
         createDefaultRecord(userLogin = "bob@test.com", started = Instant.parse("2025-01-01T08:00:00Z"))
         val (records, total) = recordDao.findAll(
-            1, 10, "alice@test.com",
+            1, 10, null, "alice@test.com",
             Instant.parse("2025-01-01T07:00:00Z"),
             Instant.parse("2025-01-01T09:00:00Z"),
         )
@@ -131,8 +131,73 @@ class RecordDaoTest : DatabaseTestBase() {
     }
 
     @Test
+    fun `findAll filters by testId`() {
+        val user2 = userDao.createUser("owner2@test.com", "hashed_pw")
+        val twi2 = testDao.create("Test2", "cover2.jpg", listOf("000.jpg"), user2.id.value)
+        val testId2 = twi2.test.id.value
+        val imageIds2 = twi2.imageIds
+
+        createDefaultRecord()
+        val items2 = imageIds2.map { CreateRecordItemData(it, RecordItemMetrics(1.0)) }
+        recordDao.create(testId2, "user@test.com", startedAt, finishedAt, 100, items2)
+
+        val (records, total) = recordDao.findAll(1, 10, testId, null, null, null)
+        assertEquals(1, records.size)
+        assertEquals(1L, total)
+        assertEquals(testId, records[0].testId)
+    }
+
+    @Test
+    fun `suggestUsers returns distinct logins`() {
+        createDefaultRecord(userLogin = "alice@test.com")
+        createDefaultRecord(userLogin = "alice@test.com")
+        createDefaultRecord(userLogin = "bob@test.com")
+
+        val (logins, total) = recordDao.suggestUsers(1, 10, null, null, null)
+        assertEquals(2, logins.size)
+        assertEquals(2L, total)
+        assertTrue(logins.contains("alice@test.com"))
+        assertTrue(logins.contains("bob@test.com"))
+    }
+
+    @Test
+    fun `suggestUsers filters by testId`() {
+        val user2 = userDao.createUser("owner2@test.com", "hashed_pw")
+        val twi2 = testDao.create("Test2", "cover2.jpg", listOf("000.jpg"), user2.id.value)
+        val testId2 = twi2.test.id.value
+        val imageIds2 = twi2.imageIds
+        val items2 = imageIds2.map { CreateRecordItemData(it, RecordItemMetrics(1.0)) }
+
+        createDefaultRecord(userLogin = "alice@test.com")
+        recordDao.create(testId2, "bob@test.com", startedAt, finishedAt, 100, items2)
+
+        val (logins, total) = recordDao.suggestUsers(1, 10, testId, null, null)
+        assertEquals(1, logins.size)
+        assertEquals("alice@test.com", logins[0])
+        assertEquals(1L, total)
+    }
+
+    @Test
+    fun `suggestUsers filters by from timestamp`() {
+        createDefaultRecord(userLogin = "early@test.com", started = Instant.parse("2025-01-01T08:00:00Z"))
+        createDefaultRecord(userLogin = "late@test.com", started = Instant.parse("2025-01-01T12:00:00Z"))
+
+        val (logins, total) = recordDao.suggestUsers(1, 10, null, Instant.parse("2025-01-01T10:00:00Z"), null)
+        assertEquals(1, logins.size)
+        assertEquals("late@test.com", logins[0])
+        assertEquals(1L, total)
+    }
+
+    @Test
+    fun `suggestUsers returns empty when no matches`() {
+        val (logins, total) = recordDao.suggestUsers(1, 10, 99999, null, null)
+        assertTrue(logins.isEmpty())
+        assertEquals(0L, total)
+    }
+
+    @Test
     fun `findAll returns empty when no matches`() {
-        val (records, total) = recordDao.findAll(1, 10, "nobody@test.com", null, null)
+        val (records, total) = recordDao.findAll(1, 10, null, "nobody@test.com", null, null)
         assertTrue(records.isEmpty())
         assertEquals(0L, total)
     }

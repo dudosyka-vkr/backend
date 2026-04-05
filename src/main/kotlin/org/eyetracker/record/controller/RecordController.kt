@@ -31,11 +31,22 @@ fun Route.recordRoutes(recordService: RecordService) {
             get {
                 val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
                 val pageSize = call.request.queryParameters["pageSize"]?.toIntOrNull() ?: 20
+                val testId = call.request.queryParameters["testId"]?.toIntOrNull()
                 val userLogin = call.request.queryParameters["userLogin"]
                 val from = call.request.queryParameters["from"]
                 val to = call.request.queryParameters["to"]
 
-                call.respond(recordService.getAll(page, pageSize, userLogin, from, to))
+                call.respond(recordService.getAll(page, pageSize, testId, userLogin, from, to))
+            }
+
+            get("/users/suggest") {
+                val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+                val pageSize = call.request.queryParameters["pageSize"]?.toIntOrNull() ?: 20
+                val testId = call.request.queryParameters["testId"]?.toIntOrNull()
+                val from = call.request.queryParameters["from"]
+                val to = call.request.queryParameters["to"]
+
+                call.respond(recordService.suggestUsers(page, pageSize, testId, from, to))
             }
 
             get("/{id}") {

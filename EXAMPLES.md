@@ -1,11 +1,11 @@
 # Примеры запросов к API
 
-Базовый URL: `http://localhost:8080`
+Базовый URL: `$API_BASE_URL`
 
 ## Регистрация
 
 ```bash
-curl -X POST http://localhost:8080/auth/register \
+curl -X POST $API_BASE_URL/auth/register \
   -H "Content-Type: application/json" \
   -d '{"login":"user@test.com","password":"secret123"}'
 ```
@@ -23,7 +23,7 @@ curl -X POST http://localhost:8080/auth/register \
 ## Авторизация
 
 ```bash
-curl -X POST http://localhost:8080/auth/login \
+curl -X POST $API_BASE_URL/auth/login \
   -H "Content-Type: application/json" \
   -d '{"login":"user@test.com","password":"secret123"}'
 ```
@@ -43,7 +43,7 @@ curl -X POST http://localhost:8080/auth/login \
 Для защищённых эндпоинтов передавайте токен в заголовке `Authorization`:
 
 ```bash
-curl http://localhost:8080/protected-endpoint \
+curl $API_BASE_URL/protected-endpoint \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -55,7 +55,7 @@ Token is not valid or has expired
 ## Получить роль текущего пользователя
 
 ```bash
-curl http://localhost:8080/auth/me/role \
+curl $API_BASE_URL/auth/me/role \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -67,7 +67,7 @@ curl http://localhost:8080/auth/me/role \
 ## Создание пользователя (ADMIN+)
 
 ```bash
-curl -X POST http://localhost:8080/auth/users \
+curl -X POST $API_BASE_URL/auth/users \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <admin_token>" \
   -d '{"login":"newuser@test.com","password":"secret123","role":"USER"}'
@@ -93,7 +93,7 @@ curl -X POST http://localhost:8080/auth/users \
 ### Создать тест (multipart, ADMIN+)
 
 ```bash
-curl -X POST http://localhost:8080/tests \
+curl -X POST $API_BASE_URL/tests \
   -H "Authorization: Bearer <admin_token>" \
   -F "name=My Test" \
   -F "cover=@cover.png;type=image/png" \
@@ -117,7 +117,7 @@ curl -X POST http://localhost:8080/tests \
 ### Обновить тест (multipart, ADMIN+)
 
 ```bash
-curl -X PUT http://localhost:8080/tests/1 \
+curl -X PUT $API_BASE_URL/tests/1 \
   -H "Authorization: Bearer <admin_token>" \
   -F "name=Updated Test" \
   -F "cover=@new_cover.png;type=image/png" \
@@ -129,7 +129,7 @@ curl -X PUT http://localhost:8080/tests/1 \
 ### Обновить ROI изображения (ADMIN+)
 
 ```bash
-curl -X PATCH http://localhost:8080/tests/images/1/roi \
+curl -X PATCH $API_BASE_URL/tests/images/1/roi \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <admin_token>" \
   -d '{"roi":"{\"x\":10,\"y\":20,\"w\":100,\"h\":50}"}'
@@ -148,7 +148,7 @@ curl -X PATCH http://localhost:8080/tests/images/1/roi \
 ### Список тестов
 
 ```bash
-curl http://localhost:8080/tests \
+curl $API_BASE_URL/tests \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -160,7 +160,7 @@ curl http://localhost:8080/tests \
 ### Получить тест по ID
 
 ```bash
-curl http://localhost:8080/tests/1 \
+curl $API_BASE_URL/tests/1 \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -169,7 +169,7 @@ curl http://localhost:8080/tests/1 \
 ### Удалить тест (ADMIN+)
 
 ```bash
-curl -X DELETE http://localhost:8080/tests/1 \
+curl -X DELETE $API_BASE_URL/tests/1 \
   -H "Authorization: Bearer <admin_token>"
 ```
 
@@ -179,11 +179,11 @@ curl -X DELETE http://localhost:8080/tests/1 \
 
 ```bash
 # Обложка
-curl http://localhost:8080/tests/1/cover \
+curl $API_BASE_URL/tests/1/cover \
   -H "Authorization: Bearer <token>" -o cover.png
 
 # Изображение по индексу (0-based)
-curl http://localhost:8080/tests/1/images/0 \
+curl $API_BASE_URL/tests/1/images/0 \
   -H "Authorization: Bearer <token>" -o image.jpg
 ```
 
@@ -194,7 +194,7 @@ curl http://localhost:8080/tests/1/images/0 \
 ### Создать прохождение
 
 ```bash
-curl -X POST http://localhost:8080/records \
+curl -X POST $API_BASE_URL/records \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <token>" \
   -d '{
@@ -239,7 +239,7 @@ curl -X POST http://localhost:8080/records \
 ### Список прохождений (с пагинацией и фильтрами)
 
 ```bash
-curl "http://localhost:8080/records?page=1&pageSize=20&testId=1&userLogin=student@example.com&from=2025-01-01T00:00:00Z&to=2025-12-31T23:59:59Z" \
+curl "$API_BASE_URL/records?page=1&pageSize=20&testId=1&userLogin=student@example.com&from=2025-01-01T00:00:00Z&to=2025-12-31T23:59:59Z" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -266,7 +266,7 @@ curl "http://localhost:8080/records?page=1&pageSize=20&testId=1&userLogin=studen
 ### Список уникальных участников (suggest)
 
 ```bash
-curl "http://localhost:8080/records/users/suggest?page=1&pageSize=20&testId=1" \
+curl "$API_BASE_URL/records/users/suggest?page=1&pageSize=20&testId=1" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -283,7 +283,7 @@ curl "http://localhost:8080/records/users/suggest?page=1&pageSize=20&testId=1" \
 ### Получить прохождение по ID
 
 ```bash
-curl http://localhost:8080/records/1 \
+curl $API_BASE_URL/records/1 \
   -H "Authorization: Bearer <token>"
 ```
 

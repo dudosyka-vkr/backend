@@ -2,7 +2,7 @@ val ktor_version = "3.1.1"
 val exposed_version = "0.58.0"
 val logback_version = "1.5.16"
 val koin_version = "4.0.2"
-val flyway_version = "11.3.1"
+val flyway_version = "9.22.3"
 
 plugins {
     kotlin("jvm") version "2.1.10"
@@ -41,7 +41,6 @@ dependencies {
 
     // Flyway Migrations
     implementation("org.flywaydb:flyway-core:$flyway_version")
-    implementation("org.flywaydb:flyway-database-postgresql:$flyway_version")
 
     // Koin DI
     implementation("io.insert-koin:koin-ktor:$koin_version")

@@ -12,6 +12,10 @@ fun Application.configureDatabaseFactory() {
 
     Flyway.configure()
         .dataSource(url, user, password)
+        .locations("classpath:db/migration")
+        .sqlMigrationPrefix("V")
+        .sqlMigrationSeparator("__")
+        .sqlMigrationSuffixes(".sql")
         .load()
         .migrate()
 

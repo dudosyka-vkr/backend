@@ -31,6 +31,12 @@ fun Route.authRoutes(authService: AuthService) {
         }
 
         authenticate("auth-jwt") {
+            get("/me/role") {
+                val principal = call.principal<JWTPrincipal>()!!
+                val role = principal.payload.getClaim("role").asString()
+                call.respond(RoleResponse(role))
+            }
+
             post("/users") {
                 val principal = call.principal<JWTPrincipal>()!!
                 val callerRole = principal.payload.getClaim("role").asString()

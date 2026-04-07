@@ -12,14 +12,14 @@ backend/
 │   ├── Application.kt                         # Точка входа (Netty EngineMain)
 │   ├── auth/
 │   │   ├── controller/
-│   │   │   └── AuthController.kt              # POST /auth/login, /register, /users
+│   │   │   └── AuthController.kt              # POST /auth/login, /register, /users; GET /auth/me/role
 │   │   ├── dao/
 │   │   │   ├── UserTable.kt                   # Exposed IntIdTable("users")
 │   │   │   ├── UserEntity.kt                  # Exposed IntEntity для users
 │   │   │   └── UserDao.kt                     # findByLogin(), createUser()
 │   │   ├── dto/
 │   │   │   └── AuthDtos.kt                    # LoginRequest, RegisterRequest, CreateUserRequest,
-│   │   │                                      # TokenResponse, UserResponse, ErrorResponse
+│   │   │                                      # TokenResponse, UserResponse, RoleResponse, ErrorResponse
 │   │   └── service/
 │   │       ├── JwtConfig.kt                   # Data class: secret, issuer, audience, realm
 │   │       └── AuthService.kt                 # login(), register(), createUser(), Role object
@@ -369,6 +369,7 @@ record_items
 |-------|------|----------------|--------------|-------|
 | POST | `/auth/register` | Нет | `{"login":"...","password":"..."}` | `201 {"token":"..."}` или `409 {"error":"..."}` |
 | POST | `/auth/login` | Нет | `{"login":"...","password":"..."}` | `200 {"token":"..."}` или `401 {"error":"..."}` |
+| GET | `/auth/me/role` | JWT | — | `200 {"role":"USER\|ADMIN\|SUPER_ADMIN"}` |
 | POST | `/auth/users` | JWT (ADMIN+) | `{"login":"...","password":"...","role":"USER\|ADMIN"}` | `201 {"id":...,"login":"...","role":"..."}` или `403`/`409` |
 
 Правила создания пользователей:

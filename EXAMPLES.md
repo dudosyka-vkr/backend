@@ -52,6 +52,18 @@ curl http://localhost:8080/protected-endpoint \
 Token is not valid or has expired
 ```
 
+## Получить роль текущего пользователя
+
+```bash
+curl http://localhost:8080/auth/me/role \
+  -H "Authorization: Bearer <token>"
+```
+
+Ответ `200`:
+```json
+{"role":"USER"}
+```
+
 ## Создание пользователя (ADMIN+)
 
 ```bash

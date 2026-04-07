@@ -18,4 +18,7 @@ data class CreateUserRequest(val login: String, val password: String, val role: 
 data class UserResponse(val id: Int, val login: String, val role: String)
 
 @Serializable
+data class RoleResponse(val role: String)
+
+@Serializable
 data class ErrorResponse(val error: String)

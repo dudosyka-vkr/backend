@@ -5,13 +5,16 @@ import kotlinx.datetime.Instant
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.eyetracker.record.dto.RecordItemMetrics
-import org.eyetracker.test.dao.TestImageTable
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.update
+
+private val lenientJson = Json { ignoreUnknownKeys = true }
 
 data class CreateRecordItemData(val imageId: Int, val metrics: RecordItemMetrics)
 
@@ -24,6 +27,12 @@ data class RecordItemWithMetrics(
     val id: Int,
     val imageId: Int,
     val metrics: RecordItemMetrics,
+)
+
+data class RecordItemSyncData(
+    val itemId: Int,
+    val imageId: Int,
+    val metricsJson: String,
 )
 
 class RecordDao {
@@ -58,7 +67,7 @@ class RecordDao {
         val record = RecordEntity.findById(recordId) ?: return@transaction null
         val items = RecordItemEntity.find { RecordItemTable.recordId eq recordId }
             .map { entity ->
-                val metrics = Json.decodeFromString<RecordItemMetrics>(entity.metricsJson)
+                val metrics = lenientJson.decodeFromString<RecordItemMetrics>(entity.metricsJson)
                 RecordItemWithMetrics(entity.id.value, entity.imageId, metrics)
             }
         RecordWithItems(record, items)
@@ -69,6 +78,7 @@ class RecordDao {
         pageSize: Int,
         testId: Int?,
         userLogin: String?,
+        userLoginContains: String?,
         from: Instant?,
         to: Instant?,
     ): Pair<List<RecordEntity>, Long> = transaction {
@@ -78,6 +88,9 @@ class RecordDao {
         }
         if (!userLogin.isNullOrBlank()) {
             query.andWhere { RecordTable.userLogin eq userLogin }
+        }
+        if (!userLoginContains.isNullOrBlank()) {
+            query.andWhere { RecordTable.userLogin.lowerCase() like "%${userLoginContains.lowercase()}%" }
         }
         if (from != null) {
             query.andWhere { RecordTable.startedAt greaterEq from }
@@ -96,25 +109,29 @@ class RecordDao {
     fun findAllUnpaginated(
         testId: Int?,
         userLogin: String?,
+        userLoginContains: String?,
         from: Instant?,
         to: Instant?,
     ): List<RecordEntity> = transaction {
         val query = RecordTable.selectAll()
         if (testId != null) query.andWhere { RecordTable.testId eq testId }
         if (!userLogin.isNullOrBlank()) query.andWhere { RecordTable.userLogin eq userLogin }
+        if (!userLoginContains.isNullOrBlank()) {
+            query.andWhere { RecordTable.userLogin.lowerCase() like "%${userLoginContains.lowercase()}%" }
+        }
         if (from != null) query.andWhere { RecordTable.startedAt greaterEq from }
         if (to != null) query.andWhere { RecordTable.startedAt lessEq to }
         query.orderBy(RecordTable.id, SortOrder.DESC)
         RecordEntity.wrapRows(query).toList()
     }
 
-    fun findImageRoisForRecords(recordIds: List<Int>): Map<Int, List<String?>> = transaction {
+    fun findMetricsJsonForRecords(recordIds: List<Int>): Map<Int, List<String>> = transaction {
         if (recordIds.isEmpty()) return@transaction emptyMap()
-        (RecordItemTable innerJoin TestImageTable)
-            .select(RecordItemTable.recordId, TestImageTable.roi)
+        RecordItemTable
+            .select(RecordItemTable.recordId, RecordItemTable.metricsJson)
             .where { RecordItemTable.recordId inList recordIds }
             .groupBy { it[RecordItemTable.recordId] }
-            .mapValues { (_, rows) -> rows.map { it[TestImageTable.roi] } }
+            .mapValues { (_, rows) -> rows.map { it[RecordItemTable.metricsJson] } }
     }
 
     fun suggestUsers(
@@ -140,5 +157,24 @@ class RecordDao {
             .offset(((page - 1) * pageSize).toLong())
         val logins = query.map { it[RecordTable.userLogin] }
         Pair(logins, total)
+    }
+
+    fun findItemsForTest(testId: Int): List<RecordItemSyncData> = transaction {
+        (RecordItemTable innerJoin RecordTable)
+            .select(RecordItemTable.id, RecordItemTable.imageId, RecordItemTable.metricsJson)
+            .where { RecordTable.testId eq testId }
+            .map {
+                RecordItemSyncData(
+                    itemId = it[RecordItemTable.id].value,
+                    imageId = it[RecordItemTable.imageId],
+                    metricsJson = it[RecordItemTable.metricsJson],
+                )
+            }
+    }
+
+    fun updateItemMetrics(itemId: Int, metricsJson: String): Unit = transaction {
+        RecordItemTable.update({ RecordItemTable.id eq itemId }) {
+            it[RecordItemTable.metricsJson] = metricsJson
+        }
     }
 }

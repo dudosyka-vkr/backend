@@ -1,9 +1,16 @@
 package org.eyetracker.record.dto
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
-data class RecordItemMetrics(val placeholderMetric: Double = 0.0)
+data class RecordItemMetrics(
+    val gazeGroups: List<JsonObject> = emptyList(),
+    val fixations: List<JsonObject> = emptyList(),
+    val firstFixationTimeMs: Int? = null,
+    val saccades: List<JsonObject> = emptyList(),
+    val roiMetrics: List<JsonObject> = emptyList(),
+)
 
 @Serializable
 data class CreateRecordItemRequest(

@@ -172,8 +172,9 @@ abstract class IntegrationTestBase {
         token: String,
         testId: Int,
         imageIds: List<Int>,
+        metricsJson: String = """{"gazeGroups":[],"fixations":[],"firstFixationTimeMs":null,"saccades":[],"roiMetrics":[]}""",
     ): HttpResponse {
-        val itemsJson = imageIds.joinToString(",") { """{"imageId":$it,"metrics":{"placeholderMetric":1.5}}""" }
+        val itemsJson = imageIds.joinToString(",") { """{"imageId":$it,"metrics":$metricsJson}""" }
         return client.post("/records") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))

@@ -22,11 +22,11 @@ fun Application.buildAppModule() = module {
     single { UserDao() }
     single { AuthService(get(), get()) }
     single { TestDao() }
+    single { RecordDao() }
     single {
         val uploadDir = this@buildAppModule.environment.config
             .property("storage.uploadDir").getString()
-        TestService(get(), uploadDir)
+        TestService(get(), get(), uploadDir)
     }
-    single { RecordDao() }
     single { RecordService(get(), get()) }
 }

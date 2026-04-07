@@ -60,7 +60,7 @@ class RecordServiceTest {
     private fun validRequest(
         testId: Int = 1,
         items: List<CreateRecordItemRequest> = listOf(
-            CreateRecordItemRequest(10, RecordItemMetrics(1.5)),
+            CreateRecordItemRequest(10, RecordItemMetrics()),
         ),
     ) = CreateRecordRequest(
         testId = testId,
@@ -80,7 +80,7 @@ class RecordServiceTest {
 
         val rwi = RecordWithItems(
             mockRecordEntity(1),
-            listOf(RecordItemWithMetrics(100, 10, RecordItemMetrics(1.5))),
+            listOf(RecordItemWithMetrics(100, 10, RecordItemMetrics())),
         )
         every { recordDao.create(any(), any(), any(), any(), any(), any()) } returns rwi
 
@@ -127,7 +127,7 @@ class RecordServiceTest {
         every { testDao.findById(1) } returns twi
         every { testDao.findImageIdsByTestId(1) } returns listOf(10)
 
-        val req = validRequest(items = listOf(CreateRecordItemRequest(999, RecordItemMetrics(1.0))))
+        val req = validRequest(items = listOf(CreateRecordItemRequest(999, RecordItemMetrics())))
         val result = recordService.create(req, "user@test.com")
         assertIs<RecordResult.Error>(result)
         assertEquals(400, result.status)
@@ -139,7 +139,7 @@ class RecordServiceTest {
     fun `getById returns success when found`() {
         val rwi = RecordWithItems(
             mockRecordEntity(1),
-            listOf(RecordItemWithMetrics(100, 10, RecordItemMetrics(1.5))),
+            listOf(RecordItemWithMetrics(100, 10, RecordItemMetrics())),
         )
         every { recordDao.findById(1) } returns rwi
 
@@ -161,9 +161,9 @@ class RecordServiceTest {
     @Test
     fun `getAll returns paginated response`() {
         val records = listOf(mockRecordEntity(1), mockRecordEntity(2))
-        every { recordDao.findAll(1, 20, null, null, null, null) } returns Pair(records, 5L)
+        every { recordDao.findAll(1, 20, null, null, null, null, null) } returns Pair(records, 5L)
 
-        val result = recordService.getAll(1, 20, null, null, null, null)
+        val result = recordService.getAll(1, 20, null, null, null, null, null)
         assertEquals(2, result.items.size)
         assertEquals(1, result.page)
         assertEquals(20, result.pageSize)
@@ -172,24 +172,24 @@ class RecordServiceTest {
 
     @Test
     fun `getAll clamps pageSize to max 100`() {
-        every { recordDao.findAll(1, 100, null, null, null, null) } returns Pair(emptyList(), 0L)
-        val result = recordService.getAll(1, 500, null, null, null, null)
+        every { recordDao.findAll(1, 100, null, null, null, null, null) } returns Pair(emptyList(), 0L)
+        val result = recordService.getAll(1, 500, null, null, null, null, null)
         assertEquals(100, result.pageSize)
     }
 
     @Test
     fun `getAll clamps page to min 1`() {
-        every { recordDao.findAll(1, 20, null, null, null, null) } returns Pair(emptyList(), 0L)
-        val result = recordService.getAll(-5, 20, null, null, null, null)
+        every { recordDao.findAll(1, 20, null, null, null, null, null) } returns Pair(emptyList(), 0L)
+        val result = recordService.getAll(-5, 20, null, null, null, null, null)
         assertEquals(1, result.page)
     }
 
     @Test
     fun `getAll filters by testId`() {
         val records = listOf(mockRecordEntity(1, testId = 42))
-        every { recordDao.findAll(1, 20, 42, null, null, null) } returns Pair(records, 1L)
+        every { recordDao.findAll(1, 20, 42, null, null, null, null) } returns Pair(records, 1L)
 
-        val result = recordService.getAll(1, 20, 42, null, null, null)
+        val result = recordService.getAll(1, 20, 42, null, null, null, null)
         assertEquals(1, result.items.size)
         assertEquals(42, result.items[0].testId)
     }
@@ -223,29 +223,33 @@ class RecordServiceTest {
 
     // ===== getAll() with roiFilter =====
 
+    private val hitMetrics = """{"gazeGroups":[],"fixations":[],"firstFixationTimeMs":null,"saccades":[],"roiMetrics":[{"name":"hasGaze","hit":true,"color":"#00dc64","firstFixationRequired":false}]}"""
+    private val missMetrics = """{"gazeGroups":[],"fixations":[],"firstFixationTimeMs":null,"saccades":[],"roiMetrics":[{"name":"hasGaze","hit":false,"color":"#00dc64","firstFixationRequired":false}]}"""
+    private val emptyMetrics = """{"gazeGroups":[],"fixations":[],"firstFixationTimeMs":null,"saccades":[],"roiMetrics":[]}"""
+
     @Test
-    fun `getAll with roiFilter returns only records whose images match`() {
+    fun `getAll with roiFilter returns only records whose roi_metrics match`() {
         val record1 = mockRecordEntity(1)
         val record2 = mockRecordEntity(2)
-        every { recordDao.findAllUnpaginated(null, null, null, null) } returns listOf(record1, record2)
-        every { recordDao.findImageRoisForRecords(any()) } returns mapOf(
-            1 to listOf("""{"hasGaze":true}"""),
-            2 to listOf("""{"hasGaze":false}"""),
+        every { recordDao.findAllUnpaginated(null, null, null, null, null) } returns listOf(record1, record2)
+        every { recordDao.findMetricsJsonForRecords(any()) } returns mapOf(
+            1 to listOf(hitMetrics),
+            2 to listOf(missMetrics),
         )
 
-        val result = recordService.getAll(1, 20, null, null, null, null, roiFilter = mapOf("hasGaze" to true))
+        val result = recordService.getAll(1, 20, null, null, null, null, null, roiFilter = mapOf("hasGaze" to true))
         assertEquals(1, result.items.size)
         assertEquals(1, result.items[0].id)
         assertEquals(1, result.total)
     }
 
     @Test
-    fun `getAll with roiFilter excludes records with null roi`() {
+    fun `getAll with roiFilter excludes records with empty roiMetrics`() {
         val record1 = mockRecordEntity(1)
-        every { recordDao.findAllUnpaginated(null, null, null, null) } returns listOf(record1)
-        every { recordDao.findImageRoisForRecords(any()) } returns mapOf(1 to listOf(null))
+        every { recordDao.findAllUnpaginated(null, null, null, null, null) } returns listOf(record1)
+        every { recordDao.findMetricsJsonForRecords(any()) } returns mapOf(1 to listOf(emptyMetrics))
 
-        val result = recordService.getAll(1, 20, null, null, null, null, roiFilter = mapOf("hasGaze" to true))
+        val result = recordService.getAll(1, 20, null, null, null, null, null, roiFilter = mapOf("hasGaze" to true))
         assertEquals(0, result.items.size)
         assertEquals(0, result.total)
     }
@@ -253,11 +257,11 @@ class RecordServiceTest {
     @Test
     fun `getAll with roiFilter paginates correctly`() {
         val records = (1..5).map { mockRecordEntity(it) }
-        every { recordDao.findAllUnpaginated(null, null, null, null) } returns records
-        every { recordDao.findImageRoisForRecords(any()) } returns
-            records.associate { it.id.value to listOf("""{"hasGaze":true}""") }
+        every { recordDao.findAllUnpaginated(null, null, null, null, null) } returns records
+        every { recordDao.findMetricsJsonForRecords(any()) } returns
+            records.associate { it.id.value to listOf(hitMetrics) }
 
-        val result = recordService.getAll(1, 2, null, null, null, null, roiFilter = mapOf("hasGaze" to true))
+        val result = recordService.getAll(1, 2, null, null, null, null, null, roiFilter = mapOf("hasGaze" to true))
         assertEquals(2, result.items.size)
         assertEquals(5, result.total)
         assertEquals(2, result.pageSize)
@@ -265,8 +269,8 @@ class RecordServiceTest {
 
     @Test
     fun `getAll with empty roiFilter uses normal dao path`() {
-        every { recordDao.findAll(1, 20, null, null, null, null) } returns Pair(emptyList(), 0L)
-        val result = recordService.getAll(1, 20, null, null, null, null, roiFilter = emptyMap())
+        every { recordDao.findAll(1, 20, null, null, null, null, null) } returns Pair(emptyList(), 0L)
+        val result = recordService.getAll(1, 20, null, null, null, null, null, roiFilter = emptyMap())
         assertEquals(0, result.items.size)
     }
 
@@ -276,10 +280,10 @@ class RecordServiceTest {
     fun `suggestUsers with roiFilter returns logins for matching records`() {
         val record1 = mockRecordEntity(1, userLogin = "alice@test.com")
         val record2 = mockRecordEntity(2, userLogin = "bob@test.com")
-        every { recordDao.findAllUnpaginated(null, null, null, null) } returns listOf(record1, record2)
-        every { recordDao.findImageRoisForRecords(any()) } returns mapOf(
-            1 to listOf("""{"hasGaze":true}"""),
-            2 to listOf("""{"hasGaze":false}"""),
+        every { recordDao.findAllUnpaginated(null, null, null, null, null) } returns listOf(record1, record2)
+        every { recordDao.findMetricsJsonForRecords(any()) } returns mapOf(
+            1 to listOf(hitMetrics),
+            2 to listOf(missMetrics),
         )
 
         val result = recordService.suggestUsers(1, 20, null, null, null, roiFilter = mapOf("hasGaze" to true))
@@ -292,10 +296,10 @@ class RecordServiceTest {
     fun `suggestUsers with roiFilter deduplicates logins`() {
         val record1 = mockRecordEntity(1, userLogin = "alice@test.com")
         val record2 = mockRecordEntity(2, userLogin = "alice@test.com")
-        every { recordDao.findAllUnpaginated(null, null, null, null) } returns listOf(record1, record2)
-        every { recordDao.findImageRoisForRecords(any()) } returns mapOf(
-            1 to listOf("""{"hasGaze":true}"""),
-            2 to listOf("""{"hasGaze":true}"""),
+        every { recordDao.findAllUnpaginated(null, null, null, null, null) } returns listOf(record1, record2)
+        every { recordDao.findMetricsJsonForRecords(any()) } returns mapOf(
+            1 to listOf(hitMetrics),
+            2 to listOf(hitMetrics),
         )
 
         val result = recordService.suggestUsers(1, 20, null, null, null, roiFilter = mapOf("hasGaze" to true))

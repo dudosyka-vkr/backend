@@ -242,24 +242,28 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
 
     // ===== roi filter =====
 
-    private suspend fun setRoi(client: io.ktor.client.HttpClient, token: String, imageId: Int, roiJson: String) {
-        client.patch("/tests/images/$imageId/roi") {
-            contentType(ContentType.Application.Json)
-            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
-            setBody("""{"roi":"${roiJson.replace("\"", "\\\"")}"}""")
-        }
-    }
+    private val roiHitMetrics = """{"gazeGroups":[],"fixations":[],"firstFixationTimeMs":null,"saccades":[],
+        |"roiMetrics":[{"name":"hasGaze","hit":true,"color":"#00dc64","firstFixationRequired":false}]}"""
+        .trimMargin().replace("\n", "")
+
+    private val roiMissMetrics = """{"gazeGroups":[],"fixations":[],"firstFixationTimeMs":null,"saccades":[],
+        |"roiMetrics":[{"name":"hasGaze","hit":false,"color":"#00dc64","firstFixationRequired":false}]}"""
+        .trimMargin().replace("\n", "")
+
+    private val emptyMetrics =
+        """{"gazeGroups":[],"fixations":[],"firstFixationTimeMs":null,"saccades":[],"roiMetrics":[]}"""
 
     private suspend fun createRecordForImage(
         client: io.ktor.client.HttpClient,
         token: String,
         testId: Int,
         imageId: Int,
+        metricsJson: String = emptyMetrics,
     ): io.ktor.client.statement.HttpResponse {
         return client.post("/records") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
-            setBody("""{"testId":$testId,"startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[{"imageId":$imageId,"metrics":{"placeholderMetric":1.0}}]}""")
+            setBody("""{"testId":$testId,"startedAt":"2025-01-01T10:00:00Z","finishedAt":"2025-01-01T10:05:00Z","durationMs":300000,"items":[{"imageId":$imageId,"metrics":$metricsJson}]}""")
         }
     }
 
@@ -268,9 +272,8 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val (token, testData) = setupTestWithImages(client)
         val (testId, imageIds) = testData
 
-        setRoi(client, token, imageIds[0], """{"hasGaze":true}""")
-        createRecordForImage(client, token, testId, imageIds[0])  // has roi.hasGaze=true → matches
-        createRecordForImage(client, token, testId, imageIds[1])  // no roi → no match
+        createRecordForImage(client, token, testId, imageIds[0], roiHitMetrics)  // roiMetrics hasGaze=true → matches
+        createRecordForImage(client, token, testId, imageIds[1], emptyMetrics)   // no roiMetrics → no match
 
         val response = client.get("/records?roi.hasGaze=true") {
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
@@ -285,10 +288,8 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val (token, testData) = setupTestWithImages(client)
         val (testId, imageIds) = testData
 
-        setRoi(client, token, imageIds[0], """{"hasGaze":false}""")
-        setRoi(client, token, imageIds[1], """{"hasGaze":true}""")
-        createRecordForImage(client, token, testId, imageIds[0])  // roi.hasGaze=false → matches
-        createRecordForImage(client, token, testId, imageIds[1])  // roi.hasGaze=true  → no match
+        createRecordForImage(client, token, testId, imageIds[0], roiMissMetrics) // roiMetrics hasGaze=false → matches
+        createRecordForImage(client, token, testId, imageIds[1], roiHitMetrics)  // roiMetrics hasGaze=true  → no match
 
         val response = client.get("/records?roi.hasGaze=false") {
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
@@ -303,9 +304,8 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val (token, testData) = setupTestWithImages(client)
         val (testId, imageIds) = testData
 
-        setRoi(client, token, imageIds[0], """{"hasGaze":true}""")
-        createRecordForImage(client, token, testId, imageIds[0])
-        createRecordForImage(client, token, testId, imageIds[1])
+        createRecordForImage(client, token, testId, imageIds[0], roiHitMetrics)
+        createRecordForImage(client, token, testId, imageIds[1], emptyMetrics)
 
         val response = client.get("/records") {
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
@@ -320,9 +320,8 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         val (token, testData) = setupTestWithImages(client)
         val (testId, imageIds) = testData
 
-        setRoi(client, token, imageIds[0], """{"hasGaze":true}""")
-        createRecordForImage(client, token, testId, imageIds[0])  // matches
-        createRecordForImage(client, token, testId, imageIds[1])  // no match
+        createRecordForImage(client, token, testId, imageIds[0], roiHitMetrics)  // matches
+        createRecordForImage(client, token, testId, imageIds[1], emptyMetrics)   // no match
 
         val response = client.get("/records/users/suggest?roi.hasGaze=true") {
             header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
@@ -347,5 +346,97 @@ class RecordControllerIntegrationTest : IntegrationTestBase() {
         assertEquals(HttpStatusCode.OK, response.status)
         val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
         assertEquals(1, body["total"]!!.jsonPrimitive.int)  // same user, deduplicated
+    }
+
+    // ===== userLoginContains filter =====
+
+    @Test
+    fun `list records filtered by userLoginContains returns substring matches`() = testApp { client ->
+        val (token, testData) = setupTestWithImages(client)
+        val (testId, imageIds) = testData
+
+        createRecordForImage(client, token, testId, imageIds[0])
+
+        val partial = TestFixtures.ADMIN_LOGIN.substring(0, 4)
+        val response = client.get("/records?userLoginContains=$partial") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(1, body["total"]!!.jsonPrimitive.int)
+    }
+
+    @Test
+    fun `list records filtered by userLoginContains no match returns empty`() = testApp { client ->
+        val (token, testData) = setupTestWithImages(client)
+        val (testId, imageIds) = testData
+
+        createRecordForImage(client, token, testId, imageIds[0])
+
+        val response = client.get("/records?userLoginContains=zzznomatch") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(0, body["total"]!!.jsonPrimitive.int)
+    }
+
+    // ===== POST /tests/{id}/sync-roi =====
+
+    @Test
+    fun `sync roi metrics computes roi metrics from fixations and roi polygons`() = testApp { client ->
+        val (token, testData) = setupTestWithImages(client)
+        val (testId, imageIds) = testData
+
+        // Set a ROI polygon covering the center of the image (normalised coords)
+        val roiJson = """{"name":"center","color":"#00dc64","first_fixation":false,"points":[{"x":0.25,"y":0.25},{"x":0.75,"y":0.25},{"x":0.75,"y":0.75},{"x":0.25,"y":0.75}]}"""
+        client.patch("/tests/images/${imageIds[0]}/roi") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+            setBody("""{"roi":"${roiJson.replace("\"", "\\\"")}"}""")
+        }
+
+        // Create a record whose fixation falls inside the polygon
+        val metricsWithFixation = """{"gazeGroups":[],"fixations":[{"center":{"x":0.5,"y":0.5},"is_first":true}],"firstFixationTimeMs":100,"saccades":[],"roiMetrics":[]}"""
+        val createResp = createRecordForImage(client, token, testId, imageIds[0], metricsWithFixation)
+        val recordId = Json.parseToJsonElement(createResp.bodyAsText()).jsonObject["id"]!!.jsonPrimitive.int
+
+        // Call sync
+        val syncResp = client.post("/tests/$testId/sync-roi") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.NoContent, syncResp.status)
+
+        // Load the record and verify roiMetrics were computed
+        val detail = client.get("/records/$recordId") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        val detailBody = Json.parseToJsonElement(detail.bodyAsText()).jsonObject
+        val item = detailBody["items"]!!.jsonArray[0].jsonObject
+        val roiMetrics = item["metrics"]!!.jsonObject["roiMetrics"]!!.jsonArray
+        assertEquals(1, roiMetrics.size)
+        val entry = roiMetrics[0].jsonObject
+        assertEquals("center", entry["name"]!!.jsonPrimitive.content)
+        assertEquals(true, entry["hit"]!!.jsonPrimitive.boolean)
+    }
+
+    @Test
+    fun `sync roi metrics returns 404 for unknown test`() = testApp { client ->
+        val token = getAdminToken(client)
+        val response = client.post("/tests/99999/sync-roi") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(token))
+        }
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `sync roi metrics returns 403 for non-admin`() = testApp { client ->
+        val (_, testData) = setupTestWithImages(client)
+        val (testId, _) = testData
+        val userToken = registerUser(client)
+        val response = client.post("/tests/$testId/sync-roi") {
+            header(HttpHeaders.Authorization, TestFixtures.authHeader(userToken))
+        }
+        assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 }

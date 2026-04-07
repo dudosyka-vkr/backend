@@ -1,5 +1,10 @@
 package org.eyetracker.test.service
 
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import org.eyetracker.record.dao.RecordDao
+import org.eyetracker.record.dto.RecordItemMetrics
+import org.eyetracker.record.service.computeRoiMetrics
 import org.eyetracker.test.dao.TestDao
 import org.eyetracker.test.dao.TestWithImages
 import org.eyetracker.test.dto.TestListResponse
@@ -8,6 +13,8 @@ import org.eyetracker.test.dto.UpdateRoiResponse
 import java.io.File
 import java.io.InputStream
 
+private val lenientJson = Json { ignoreUnknownKeys = true }
+
 sealed class TestResult {
     data class Success(val response: TestResponse) : TestResult()
     data class Error(val message: String, val status: Int) : TestResult()
@@ -15,6 +22,7 @@ sealed class TestResult {
 
 class TestService(
     private val testDao: TestDao,
+    private val recordDao: RecordDao,
     private val uploadDir: String,
 ) {
     fun create(
@@ -147,6 +155,31 @@ class TestService(
         val updated = testDao.updateImageRoi(imageId, roi)
         if (!updated) return null
         return UpdateRoiResponse(imageId, roi)
+    }
+
+    fun syncRoiMetrics(testId: Int): TestResult {
+        testDao.findById(testId)
+            ?: return TestResult.Error("Test not found", 404)
+
+        val imageRois = testDao.findImageRoisByTestId(testId)
+        val items = recordDao.findItemsForTest(testId)
+
+        for (item in items) {
+            val roiJson = imageRois[item.imageId]
+            val metrics = try {
+                lenientJson.decodeFromString<RecordItemMetrics>(item.metricsJson)
+            } catch (_: Exception) {
+                RecordItemMetrics()
+            }
+            val newRoiMetrics = computeRoiMetrics(roiJson, metrics.fixations)
+            val updated = metrics.copy(roiMetrics = newRoiMetrics)
+            recordDao.updateItemMetrics(item.itemId, Json.encodeToString(updated))
+        }
+
+        // Return a dummy success; the controller will respond 204
+        return TestResult.Success(
+            TestResponse(testId, "", "", emptyList(), emptyList(), emptyList(), ""),
+        )
     }
 
     fun getCoverFile(testId: Int): File? {

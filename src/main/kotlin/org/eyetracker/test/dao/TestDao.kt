@@ -90,6 +90,11 @@ class TestDao {
             .map { it.id.value }
     }
 
+    fun findImageRoisByTestId(testId: Int): Map<Int, String?> = transaction {
+        TestImageEntity.find { TestImageTable.testId eq testId }
+            .associate { it.id.value to it.roi }
+    }
+
     fun updateImageRoi(imageId: Int, roi: String): Boolean = transaction {
         val image = TestImageEntity.findById(imageId) ?: return@transaction false
         image.roi = roi

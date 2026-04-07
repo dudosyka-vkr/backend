@@ -172,6 +172,18 @@ fun Route.testRoutes(testService: TestService) {
                 call.respond(HttpStatusCode.OK, result)
             }
 
+            post("/{id}/sync-roi") {
+                if (!call.requireAdmin()) return@post
+
+                val testId = call.parameters["id"]?.toIntOrNull()
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid test ID"))
+
+                when (val result = testService.syncRoiMetrics(testId)) {
+                    is TestResult.Success -> call.respond(HttpStatusCode.NoContent)
+                    is TestResult.Error -> call.respond(HttpStatusCode.fromValue(result.status), ErrorResponse(result.message))
+                }
+            }
+
             get("/{id}/cover") {
                 val testId = call.parameters["id"]?.toIntOrNull()
                     ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid test ID"))

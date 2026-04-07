@@ -33,13 +33,14 @@ fun Route.recordRoutes(recordService: RecordService) {
                 val pageSize = call.request.queryParameters["pageSize"]?.toIntOrNull() ?: 20
                 val testId = call.request.queryParameters["testId"]?.toIntOrNull()
                 val userLogin = call.request.queryParameters["userLogin"]
+                val userLoginContains = call.request.queryParameters["userLoginContains"]
                 val from = call.request.queryParameters["from"]
                 val to = call.request.queryParameters["to"]
                 val roiFilter = call.request.queryParameters.entries()
                     .filter { it.key.startsWith("roi.") }
                     .associate { it.key.removePrefix("roi.") to (it.value.firstOrNull() == "true") }
 
-                call.respond(recordService.getAll(page, pageSize, testId, userLogin, from, to, roiFilter))
+                call.respond(recordService.getAll(page, pageSize, testId, userLogin, userLoginContains, from, to, roiFilter))
             }
 
             get("/users/suggest") {

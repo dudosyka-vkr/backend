@@ -4,6 +4,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.datetime.Clock
+import org.eyetracker.record.dao.RecordDao
 import org.eyetracker.test.dao.TestDao
 import org.eyetracker.test.dao.TestEntity
 import org.eyetracker.test.dao.TestTable
@@ -25,13 +26,15 @@ import kotlin.test.assertTrue
 class TestServiceTest {
 
     private lateinit var testDao: TestDao
+    private lateinit var recordDao: RecordDao
     private lateinit var testService: TestService
     private val uploadDir = "build/test-service-uploads"
 
     @BeforeEach
     fun setup() {
         testDao = mockk()
-        testService = TestService(testDao, uploadDir)
+        recordDao = mockk()
+        testService = TestService(testDao, recordDao, uploadDir)
         File(uploadDir).mkdirs()
     }
 

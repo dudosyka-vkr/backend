@@ -2,6 +2,8 @@ package org.eyetracker.record.service
 
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.eyetracker.record.dao.CreateRecordItemData
@@ -71,6 +73,7 @@ class RecordService(
         pageSize: Int,
         testId: Int?,
         userLogin: String?,
+        userLoginContains: String?,
         from: String?,
         to: String?,
         roiFilter: Map<String, Boolean> = emptyMap(),
@@ -82,22 +85,24 @@ class RecordService(
         val toInstant = to?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
         if (roiFilter.isNotEmpty()) {
-            val allRecords = recordDao.findAllUnpaginated(testId, userLogin, fromInstant, toInstant)
-            val roisByRecord = recordDao.findImageRoisForRecords(allRecords.map { it.id.value })
+            val allRecords = recordDao.findAllUnpaginated(testId, userLogin, userLoginContains, fromInstant, toInstant)
+            val metricsJsonByRecord = recordDao.findMetricsJsonForRecords(allRecords.map { it.id.value })
             val filtered = allRecords.filter { record ->
-                roisByRecord[record.id.value].orEmpty().any { roi -> roiMatchesFilter(roi, roiFilter) }
+                metricsJsonByRecord[record.id.value].orEmpty().any { metricsJson ->
+                    metricsMatchesRoiFilter(metricsJson, roiFilter)
+                }
             }
             val total = filtered.size
-            val page_records = filtered.drop((clampedPage - 1) * clampedPageSize).take(clampedPageSize)
+            val pageRecords = filtered.drop((clampedPage - 1) * clampedPageSize).take(clampedPageSize)
             return RecordListResponse(
-                items = page_records.map { toSummaryResponse(it) },
+                items = pageRecords.map { toSummaryResponse(it) },
                 page = clampedPage,
                 pageSize = clampedPageSize,
                 total = total,
             )
         }
 
-        val (records, total) = recordDao.findAll(clampedPage, clampedPageSize, testId, userLogin, fromInstant, toInstant)
+        val (records, total) = recordDao.findAll(clampedPage, clampedPageSize, testId, userLogin, userLoginContains, fromInstant, toInstant)
         return RecordListResponse(
             items = records.map { toSummaryResponse(it) },
             page = clampedPage,
@@ -121,16 +126,18 @@ class RecordService(
         val toInstant = to?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
         if (roiFilter.isNotEmpty()) {
-            val allRecords = recordDao.findAllUnpaginated(testId, null, fromInstant, toInstant)
-            val roisByRecord = recordDao.findImageRoisForRecords(allRecords.map { it.id.value })
+            val allRecords = recordDao.findAllUnpaginated(testId, null, null, fromInstant, toInstant)
+            val metricsJsonByRecord = recordDao.findMetricsJsonForRecords(allRecords.map { it.id.value })
             val filtered = allRecords.filter { record ->
-                roisByRecord[record.id.value].orEmpty().any { roi -> roiMatchesFilter(roi, roiFilter) }
+                metricsJsonByRecord[record.id.value].orEmpty().any { metricsJson ->
+                    metricsMatchesRoiFilter(metricsJson, roiFilter)
+                }
             }
             val logins = filtered.map { it.userLogin }.distinct().sorted()
             val total = logins.size
-            val page_logins = logins.drop((clampedPage - 1) * clampedPageSize).take(clampedPageSize)
+            val pageLogins = logins.drop((clampedPage - 1) * clampedPageSize).take(clampedPageSize)
             return UserSuggestResponse(
-                items = page_logins,
+                items = pageLogins,
                 page = clampedPage,
                 pageSize = clampedPageSize,
                 total = total,
@@ -146,11 +153,18 @@ class RecordService(
         )
     }
 
-    private fun roiMatchesFilter(roiJson: String?, filter: Map<String, Boolean>): Boolean {
-        if (roiJson == null) return false
+    private fun metricsMatchesRoiFilter(metricsJson: String, filter: Map<String, Boolean>): Boolean {
         return try {
-            val obj = Json.parseToJsonElement(roiJson).jsonObject
-            filter.all { (key, value) -> runCatching { obj[key]?.jsonPrimitive?.content?.toBooleanStrictOrNull() }.getOrNull() == value }
+            val obj = Json.parseToJsonElement(metricsJson).jsonObject
+            val roiMetrics = obj["roiMetrics"]?.jsonArray ?: return filter.all { (_, required) -> !required }
+            val hitMap = mutableMapOf<String, Boolean>()
+            for (roi in roiMetrics) {
+                val roiObj = roi.jsonObject
+                val name = roiObj["name"]?.jsonPrimitive?.content ?: continue
+                val hit = roiObj["hit"]?.jsonPrimitive?.booleanOrNull ?: false
+                hitMap[name] = (hitMap[name] ?: false) || hit
+            }
+            filter.all { (name, required) -> (hitMap[name] ?: false) == required }
         } catch (e: Exception) {
             false
         }

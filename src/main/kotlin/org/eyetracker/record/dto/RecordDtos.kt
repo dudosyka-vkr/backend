@@ -19,12 +19,42 @@ data class CreateRecordItemRequest(
 )
 
 @Serializable
+data class CreateUnauthorizedRecordRequest(
+    val token: String,
+    val startedAt: String,
+    val finishedAt: String,
+    val durationMs: Long,
+    val items: List<CreateRecordItemRequest>,
+    val login: String? = null,
+)
+
+@Serializable
 data class CreateRecordRequest(
     val testId: Int,
     val startedAt: String,
     val finishedAt: String,
     val durationMs: Long,
     val items: List<CreateRecordItemRequest>,
+    val login: String? = null,
+) {
+    companion object {
+        public fun of(request: CreateRecordRequest, login: String): CreateRecordRequest {
+            return CreateRecordRequest(
+                testId = request.testId,
+                startedAt = request.startedAt,
+                finishedAt = request.finishedAt,
+                durationMs = request.durationMs,
+                items = request.items,
+                login = login,
+            )
+        }
+    }
+}
+
+@Serializable
+data class RoiHitEntry(
+    val name: String,
+    val hit: Boolean,
 )
 
 @Serializable
@@ -36,6 +66,7 @@ data class RecordSummaryResponse(
     val finishedAt: String,
     val durationMs: Long,
     val createdAt: String,
+    val roiHits: List<RoiHitEntry>,
 )
 
 @Serializable
@@ -71,6 +102,13 @@ data class UserSuggestResponse(
     val page: Int,
     val pageSize: Int,
     val total: Int,
+)
+
+@Serializable
+data class RoiSyncResponse(
+    val synced: Boolean,
+    val totalItems: Int,
+    val outOfSyncCount: Int,
 )
 
 @Serializable

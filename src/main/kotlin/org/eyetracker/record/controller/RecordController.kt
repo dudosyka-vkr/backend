@@ -7,6 +7,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.eyetracker.record.dto.CreateRecordRequest
+import org.eyetracker.record.dto.CreateUnauthorizedRecordRequest
 import org.eyetracker.record.dto.ErrorResponse
 import org.eyetracker.record.service.RecordResult
 import org.eyetracker.record.service.RecordService
@@ -15,12 +16,22 @@ private fun RoutingCall.userLogin(): String =
     principal<JWTPrincipal>()!!.payload.getClaim("email").asString()
 
 fun Route.recordRoutes(recordService: RecordService) {
+    post("/records/unauthorized") {
+        val request = call.receive<CreateUnauthorizedRecordRequest>()
+        when (val result = recordService.createByToken(request)) {
+            is RecordResult.Success -> call.respond(HttpStatusCode.Created, result.response)
+            is RecordResult.Error -> call.respond(
+                HttpStatusCode.fromValue(result.status), ErrorResponse(result.message),
+            )
+        }
+    }
+
     authenticate("auth-jwt") {
         route("/records") {
             post {
                 val request = call.receive<CreateRecordRequest>()
                 val userLogin = call.userLogin()
-                when (val result = recordService.create(request, userLogin)) {
+                when (val result = recordService.create(CreateRecordRequest.of(request, userLogin))) {
                     is RecordResult.Success -> call.respond(HttpStatusCode.Created, result.response)
                     is RecordResult.Error -> call.respond(
                         HttpStatusCode.fromValue(result.status), ErrorResponse(result.message),
@@ -54,6 +65,16 @@ fun Route.recordRoutes(recordService: RecordService) {
                     .associate { it.key.removePrefix("roi.") to (it.value.firstOrNull() == "true") }
 
                 call.respond(recordService.suggestUsers(page, pageSize, testId, from, to, roiFilter))
+            }
+
+            get("/roi-sync") {
+                val testId = call.request.queryParameters["testId"]?.toIntOrNull()
+                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("testId is required"))
+
+                val result = recordService.checkRoiSync(testId)
+                    ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse("Test not found"))
+
+                call.respond(HttpStatusCode.OK, result)
             }
 
             get("/{id}") {

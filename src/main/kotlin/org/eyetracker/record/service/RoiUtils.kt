@@ -40,8 +40,8 @@ fun pointInPolygon(px: Double, py: Double, points: JsonArray): Boolean {
 /**
  * Compute roi_metrics for one record item.
  *
- * @param roisJson   JSON string from test_images.roi — a single ROI object or null/empty.
- *                   Format: {"name":str,"color":str,"first_fixation":bool,"points":[{x,y},...]}
+ * @param roisJson   JSON string from test_images.roi — a JSON array of ROI objects.
+ *                   Format: [{"name":str,"color":str,"first_fixation":bool,"points":[{x,y},...]}]
  * @param fixations  List of fixation objects from RecordItemMetrics.fixations.
  *                   Each fixation: {"center":{"x":Double,"y":Double},"is_first":bool,...}
  * @return           List of {"name":str,"color":str,"hit":bool,"firstFixationRequired":bool}
@@ -49,45 +49,46 @@ fun pointInPolygon(px: Double, py: Double, points: JsonArray): Boolean {
 fun computeRoiMetrics(roisJson: String?, fixations: List<JsonObject>): List<JsonObject> {
     if (roisJson.isNullOrBlank()) return emptyList()
 
-    val roi: JsonObject = try {
-        kotlinx.serialization.json.Json.parseToJsonElement(roisJson).jsonObject
+    val rois: List<JsonObject> = try {
+        kotlinx.serialization.json.Json.parseToJsonElement(roisJson).jsonArray
+            .map { it.jsonObject }
     } catch (_: Exception) {
         return emptyList()
     }
-
-    val points = roi["points"]?.jsonArray ?: return emptyList()
-    val name = roi["name"]?.jsonPrimitive?.content ?: ""
-    val color = roi["color"]?.jsonPrimitive?.content ?: "#00dc64"
-    val firstRequired = roi["first_fixation"]?.jsonPrimitive?.booleanOrNull ?: false
 
     val firstFix = fixations.firstOrNull { fix ->
         fix["is_first"]?.jsonPrimitive?.booleanOrNull == true
     }
 
-    val hit = if (firstRequired) {
-        if (firstFix == null) {
-            false
-        } else {
-            val center = firstFix["center"]?.jsonObject
-            val cx = center?.get("x")?.jsonPrimitive?.doubleOrNull
-            val cy = center?.get("y")?.jsonPrimitive?.doubleOrNull
-            if (cx != null && cy != null) pointInPolygon(cx, cy, points) else false
-        }
-    } else {
-        fixations.any { fix ->
-            val center = fix["center"]?.jsonObject
-            val cx = center?.get("x")?.jsonPrimitive?.doubleOrNull
-            val cy = center?.get("y")?.jsonPrimitive?.doubleOrNull
-            if (cx != null && cy != null) pointInPolygon(cx, cy, points) else false
-        }
-    }
+    return rois.mapNotNull { roi ->
+        val points = roi["points"]?.jsonArray ?: return@mapNotNull null
+        val name = roi["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
+        val color = roi["color"]?.jsonPrimitive?.content ?: "#00dc64"
+        val firstRequired = roi["first_fixation"]?.jsonPrimitive?.booleanOrNull ?: false
 
-    return listOf(
+        val hit = if (firstRequired) {
+            if (firstFix == null) {
+                false
+            } else {
+                val center = firstFix["center"]?.jsonObject
+                val cx = center?.get("x")?.jsonPrimitive?.doubleOrNull
+                val cy = center?.get("y")?.jsonPrimitive?.doubleOrNull
+                if (cx != null && cy != null) pointInPolygon(cx, cy, points) else false
+            }
+        } else {
+            fixations.any { fix ->
+                val center = fix["center"]?.jsonObject
+                val cx = center?.get("x")?.jsonPrimitive?.doubleOrNull
+                val cy = center?.get("y")?.jsonPrimitive?.doubleOrNull
+                if (cx != null && cy != null) pointInPolygon(cx, cy, points) else false
+            }
+        }
+
         buildJsonObject {
             put("name", name)
             put("color", color)
             put("hit", hit)
             put("firstFixationRequired", firstRequired)
-        },
-    )
+        }
+    }
 }

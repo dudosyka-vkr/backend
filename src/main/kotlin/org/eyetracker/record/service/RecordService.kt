@@ -9,14 +9,22 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.eyetracker.record.dao.CreateRecordItemData
 import org.eyetracker.record.dao.RecordDao
 import org.eyetracker.record.dao.RecordEntity
+import org.eyetracker.record.dao.RecordItemBriefData
 import org.eyetracker.record.dao.RecordWithItems
 import org.eyetracker.record.dto.CreateRecordRequest
+import org.eyetracker.record.dto.CreateUnauthorizedRecordRequest
 import org.eyetracker.record.dto.RecordDetailResponse
+import org.eyetracker.record.dto.RecordItemMetrics
 import org.eyetracker.record.dto.RecordItemResponse
 import org.eyetracker.record.dto.RecordListResponse
 import org.eyetracker.record.dto.RecordSummaryResponse
+import org.eyetracker.record.dto.RoiHitEntry
+import org.eyetracker.record.dto.RoiSyncResponse
 import org.eyetracker.record.dto.UserSuggestResponse
 import org.eyetracker.test.dao.TestDao
+import org.eyetracker.test.dao.TestPassTokenDao
+
+private val lenientJson = Json { ignoreUnknownKeys = true }
 
 sealed class RecordResult {
     data class Success(val response: RecordDetailResponse) : RecordResult()
@@ -26,14 +34,17 @@ sealed class RecordResult {
 class RecordService(
     private val recordDao: RecordDao,
     private val testDao: TestDao,
+    private val testPassTokenDao: TestPassTokenDao,
 ) {
-    fun create(request: CreateRecordRequest, userLogin: String): RecordResult {
+    fun create(request: CreateRecordRequest): RecordResult {
         if (request.items.isEmpty()) {
             return RecordResult.Error("At least one item is required", 400)
         }
         if (request.durationMs < 0) {
             return RecordResult.Error("Duration must be non-negative", 400)
         }
+
+        request.login ?: return RecordResult.Error("Login is required", 400)
 
         val startedAt: Instant
         val finishedAt: Instant
@@ -56,10 +67,25 @@ class RecordService(
 
         val items = request.items.map { CreateRecordItemData(it.imageId, it.metrics) }
         val result = recordDao.create(
-            request.testId, userLogin, startedAt, finishedAt, request.durationMs, items,
+            request.testId, request.login, startedAt, finishedAt, request.durationMs, items,
         )
 
         return RecordResult.Success(toDetailResponse(result))
+    }
+
+    fun createByToken(request: CreateUnauthorizedRecordRequest): RecordResult {
+        val token = testPassTokenDao.findByCode(request.token)
+            ?: return RecordResult.Error("Invalid token", 404)
+        return create(
+            CreateRecordRequest(
+                testId = token.testId,
+                startedAt = request.startedAt,
+                finishedAt = request.finishedAt,
+                durationMs = request.durationMs,
+                items = request.items,
+                login = request.login,
+            )
+        )
     }
 
     fun getById(recordId: Int): RecordResult {
@@ -94,8 +120,9 @@ class RecordService(
             }
             val total = filtered.size
             val pageRecords = filtered.drop((clampedPage - 1) * clampedPageSize).take(clampedPageSize)
+            val itemsByRecord = recordDao.findItemsBriefForRecords(pageRecords.map { it.id.value })
             return RecordListResponse(
-                items = pageRecords.map { toSummaryResponse(it) },
+                items = pageRecords.map { toSummaryResponse(it, itemsByRecord[it.id.value] ?: emptyList()) },
                 page = clampedPage,
                 pageSize = clampedPageSize,
                 total = total,
@@ -103,8 +130,9 @@ class RecordService(
         }
 
         val (records, total) = recordDao.findAll(clampedPage, clampedPageSize, testId, userLogin, userLoginContains, fromInstant, toInstant)
+        val itemsByRecord = recordDao.findItemsBriefForRecords(records.map { it.id.value })
         return RecordListResponse(
-            items = records.map { toSummaryResponse(it) },
+            items = records.map { toSummaryResponse(it, itemsByRecord[it.id.value] ?: emptyList()) },
             page = clampedPage,
             pageSize = clampedPageSize,
             total = total.toInt(),
@@ -153,6 +181,46 @@ class RecordService(
         )
     }
 
+    fun checkRoiSync(testId: Int): RoiSyncResponse? {
+        testDao.findById(testId) ?: return null
+
+        val imageRois = testDao.findImageRoisByTestId(testId)
+        val requiredNames: Map<Int, Set<String>> = imageRois.mapValues { (_, roiJson) ->
+            roiJson?.let { parseRoiNames(it) } ?: emptySet()
+        }
+
+        val items = recordDao.findItemsForTest(testId)
+        var outOfSyncCount = 0
+
+        for (item in items) {
+            val required = requiredNames[item.imageId] ?: emptySet()
+            if (required.isEmpty()) continue
+            val metrics = try {
+                lenientJson.decodeFromString<RecordItemMetrics>(item.metricsJson)
+            } catch (_: Exception) {
+                RecordItemMetrics()
+            }
+            val present = metrics.roiMetrics
+                .mapNotNull { it["name"]?.jsonPrimitive?.content }
+                .toSet()
+            if (present != required) outOfSyncCount++
+        }
+
+        return RoiSyncResponse(
+            synced = outOfSyncCount == 0,
+            totalItems = items.size,
+            outOfSyncCount = outOfSyncCount,
+        )
+    }
+
+    private fun parseRoiNames(roiJson: String): Set<String> = try {
+        Json.parseToJsonElement(roiJson).jsonArray
+            .mapNotNull { it.jsonObject["name"]?.jsonPrimitive?.content }
+            .toSet()
+    } catch (_: Exception) {
+        emptySet()
+    }
+
     private fun metricsMatchesRoiFilter(metricsJson: String, filter: Map<String, Boolean>): Boolean {
         return try {
             val obj = Json.parseToJsonElement(metricsJson).jsonObject
@@ -183,7 +251,17 @@ class RecordService(
         )
     }
 
-    private fun toSummaryResponse(record: RecordEntity): RecordSummaryResponse {
+    private fun toSummaryResponse(record: RecordEntity, items: List<RecordItemBriefData>): RecordSummaryResponse {
+        val roiHits = items.flatMap { item ->
+            val metrics = runCatching {
+                lenientJson.decodeFromString<RecordItemMetrics>(item.metricsJson)
+            }.getOrDefault(RecordItemMetrics())
+            metrics.roiMetrics.mapNotNull { roi ->
+                val name = roi["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                val hit = roi["hit"]?.jsonPrimitive?.booleanOrNull ?: false
+                RoiHitEntry(name = "$name (${item.sortOrder})", hit = hit)
+            }
+        }
         return RecordSummaryResponse(
             id = record.id.value,
             testId = record.testId,
@@ -192,6 +270,7 @@ class RecordService(
             finishedAt = record.finishedAt.toString(),
             durationMs = record.durationMs,
             createdAt = record.createdAt.toString(),
+            roiHits = roiHits,
         )
     }
 }

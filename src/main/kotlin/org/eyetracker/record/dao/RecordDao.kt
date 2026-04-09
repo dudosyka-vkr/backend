@@ -5,6 +5,7 @@ import kotlinx.datetime.Instant
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.eyetracker.record.dto.RecordItemMetrics
+import org.eyetracker.test.dao.TestImageTable
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
@@ -32,6 +33,11 @@ data class RecordItemWithMetrics(
 data class RecordItemSyncData(
     val itemId: Int,
     val imageId: Int,
+    val metricsJson: String,
+)
+
+data class RecordItemBriefData(
+    val sortOrder: Int,
     val metricsJson: String,
 )
 
@@ -125,6 +131,17 @@ class RecordDao {
         RecordEntity.wrapRows(query).toList()
     }
 
+    fun findItemsBriefForRecords(recordIds: List<Int>): Map<Int, List<RecordItemBriefData>> = transaction {
+        if (recordIds.isEmpty()) return@transaction emptyMap()
+        (RecordItemTable innerJoin TestImageTable)
+            .select(RecordItemTable.recordId, TestImageTable.sortOrder, RecordItemTable.metricsJson)
+            .where { RecordItemTable.recordId inList recordIds }
+            .groupBy { it[RecordItemTable.recordId] }
+            .mapValues { (_, rows) ->
+                rows.map { RecordItemBriefData(it[TestImageTable.sortOrder], it[RecordItemTable.metricsJson]) }
+            }
+    }
+
     fun findMetricsJsonForRecords(recordIds: List<Int>): Map<Int, List<String>> = transaction {
         if (recordIds.isEmpty()) return@transaction emptyMap()
         RecordItemTable
@@ -167,6 +184,25 @@ class RecordDao {
                 RecordItemSyncData(
                     itemId = it[RecordItemTable.id].value,
                     imageId = it[RecordItemTable.imageId],
+                    metricsJson = it[RecordItemTable.metricsJson],
+                )
+            }
+    }
+
+    data class RecordItemStatsData(
+        val recordId: Int,
+        val userLogin: String,
+        val metricsJson: String,
+    )
+
+    fun findItemsWithRecordForTest(testId: Int): List<RecordItemStatsData> = transaction {
+        (RecordItemTable innerJoin RecordTable)
+            .select(RecordTable.id, RecordTable.userLogin, RecordItemTable.metricsJson)
+            .where { RecordTable.testId eq testId }
+            .map {
+                RecordItemStatsData(
+                    recordId = it[RecordTable.id].value,
+                    userLogin = it[RecordTable.userLogin],
                     metricsJson = it[RecordItemTable.metricsJson],
                 )
             }

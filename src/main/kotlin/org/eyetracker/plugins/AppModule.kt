@@ -7,6 +7,7 @@ import org.eyetracker.auth.service.JwtConfig
 import org.eyetracker.record.dao.RecordDao
 import org.eyetracker.record.service.RecordService
 import org.eyetracker.test.dao.TestDao
+import org.eyetracker.test.dao.TestPassTokenDao
 import org.eyetracker.test.service.TestService
 import org.koin.dsl.module
 
@@ -22,11 +23,12 @@ fun Application.buildAppModule() = module {
     single { UserDao() }
     single { AuthService(get(), get()) }
     single { TestDao() }
+    single { TestPassTokenDao() }
     single { RecordDao() }
     single {
         val uploadDir = this@buildAppModule.environment.config
             .property("storage.uploadDir").getString()
-        TestService(get(), get(), uploadDir)
+        TestService(get(), get(), get(), uploadDir)
     }
-    single { RecordService(get(), get()) }
+    single { RecordService(get(), get(), get()) }
 }

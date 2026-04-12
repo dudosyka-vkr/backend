@@ -4,61 +4,13 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
 @Serializable
-data class TestImageInfo(
-    val id: Int,
-    val url: String,
-    val sortOrder: Int,
-    val rois: List<JsonObject>,
-)
+data class ErrorResponse(val error: String)
 
 @Serializable
-data class TestResponse(
-    val id: Int,
-    val name: String,
-    val coverUrl: String,
-    val createdAt: String,
-    val images: List<TestImageInfo>,
-)
+data class UpdateAoiRequest(val aoi: List<JsonObject>)
 
 @Serializable
-data class TestListResponse(
-    val tests: List<TestResponse>,
-)
-
-@Serializable
-data class TestImageResponse(
-    val imageId: Int,
-    val imageUrl: String,
-    val sortOrder: Int,
-)
-
-@Serializable
-data class MoveImageRequest(val newPosition: Int)
-
-@Serializable
-data class MoveImageResponse(val imageId: Int, val sortOrder: Int)
-
-@Serializable
-data class UpdateRoisRequest(val rois: List<JsonObject>)
-
-@Serializable
-data class UpdateRoisResponse(val imageId: Int, val rois: List<JsonObject>)
-
-@Serializable
-data class RoiStatEntry(
-    val name: String,
-    val color: String,
-    val hits: Int,
-    val total: Int,
-    val firstFixationRequired: Boolean,
-)
-
-@Serializable
-data class RoiStatsResponse(
-    val rois: List<RoiStatEntry>,
-    val totalRecords: Int,
-    val uniqueUsers: Int,
-)
+data class UpdateAoiResponse(val testId: Int, val aoi: List<JsonObject>)
 
 @Serializable
 data class TestPassTokenResponse(
@@ -67,4 +19,31 @@ data class TestPassTokenResponse(
 )
 
 @Serializable
-data class ErrorResponse(val error: String)
+data class AoiStatEntry(
+    val name: String,
+    val color: String,
+    val hits: Int,
+    val total: Int,
+    val firstFixationRequired: Boolean,
+)
+
+@Serializable
+data class AoiStatsResponse(
+    val aois: List<AoiStatEntry>,
+    val totalRecords: Int,
+    val uniqueUsers: Int,
+)
+
+@Serializable
+data class TestResponse(
+    val id: Int,
+    val name: String,
+    val imageUrl: String,
+    val aoi: List<JsonObject>,
+    val createdAt: String,
+)
+
+@Serializable
+data class TestListResponse(
+    val tests: List<TestResponse>,
+)

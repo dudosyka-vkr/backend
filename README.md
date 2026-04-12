@@ -27,26 +27,6 @@ make local
 | `make deploy-stop` | Остановить все контейнеры |
 | `make build` | Собрать fat jar |
 | `make clean` | Очистить артефакты сборки |
-| `make test` | Запустить все тесты |
-| `make test-unit` | Только unit-тесты |
-| `make test-integration` | Только интеграционные тесты |
-
-## Тестирование
-
-Требуется запущенный PostgreSQL (`cd deploy && docker-compose up -d postgres`).
-
-```bash
-# Запустить все тесты (174 теста)
-make test
-
-# Только unit-тесты (сервисы + DAO)
-make test-unit
-
-# Только интеграционные тесты (HTTP-эндпоинты)
-make test-integration
-```
-
-Тесты используют прямое подключение к PostgreSQL, MockK для моков в unit-тестах сервисов, и Ktor `testApplication` для интеграционных тестов.
 
 ## Конфигурация
 
@@ -61,13 +41,15 @@ make test-integration
 | Пароль БД | `DATABASE_PASSWORD` | `my-secret-pw` |
 | Директория загрузок | `UPLOAD_DIR` | `uploads` |
 
-## Примеры запросов
+## Документация
 
-Полные примеры curl-запросов с ответами — в [EXAMPLES.md](EXAMPLES.md).
+- Полная техническая документация — [PROJECT.md](PROJECT.md)
+- Все маршруты API с форматами запросов и ответов — [API_DOC.md](API_DOC.md)
+- Примеры curl-запросов — [EXAMPLES.md](EXAMPLES.md)
 
 ## Деплой
 
-Docker-окружение находится в директории `deploy/` (на основе [jvm-docker-env](https://github.com/dudosyka/jvm-docker-env)).
+Docker-окружение находится в директории `deploy/`.
 
 ```bash
 # Собрать fat jar и запустить в Docker
@@ -78,7 +60,3 @@ make deploy-stop
 ```
 
 Для production установите переменные окружения `JWT_SECRET`, `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`.
-
-## Документация проекта
-
-Подробная техническая документация — в [PROJECT.md](PROJECT.md).

@@ -15,27 +15,24 @@ import org.eyetracker.record.service.RecordService
 private fun RoutingCall.userLogin(): String =
     principal<JWTPrincipal>()!!.payload.getClaim("email").asString()
 
-fun Route.recordRoutes(recordService: RecordService) {
+fun Route.recordRoutes(service: RecordService) {
     post("/records/unauthorized") {
         val request = call.receive<CreateUnauthorizedRecordRequest>()
-        when (val result = recordService.createByToken(request)) {
+        when (val result = service.createByToken(request)) {
             is RecordResult.Success -> call.respond(HttpStatusCode.Created, result.response)
-            is RecordResult.Error -> call.respond(
-                HttpStatusCode.fromValue(result.status), ErrorResponse(result.message),
-            )
+            is RecordResult.Error -> call.respond(HttpStatusCode.fromValue(result.status), ErrorResponse(result.message))
         }
     }
 
     authenticate("auth-jwt") {
         route("/records") {
+
             post {
                 val request = call.receive<CreateRecordRequest>()
                 val userLogin = call.userLogin()
-                when (val result = recordService.create(CreateRecordRequest.of(request, userLogin))) {
+                when (val result = service.create(request, userLogin)) {
                     is RecordResult.Success -> call.respond(HttpStatusCode.Created, result.response)
-                    is RecordResult.Error -> call.respond(
-                        HttpStatusCode.fromValue(result.status), ErrorResponse(result.message),
-                    )
+                    is RecordResult.Error -> call.respond(HttpStatusCode.fromValue(result.status), ErrorResponse(result.message))
                 }
             }
 
@@ -47,11 +44,11 @@ fun Route.recordRoutes(recordService: RecordService) {
                 val userLoginContains = call.request.queryParameters["userLoginContains"]
                 val from = call.request.queryParameters["from"]
                 val to = call.request.queryParameters["to"]
-                val roiFilter = call.request.queryParameters.entries()
-                    .filter { it.key.startsWith("roi.") }
-                    .associate { it.key.removePrefix("roi.") to (it.value.firstOrNull() == "true") }
+                val aoiFilter = call.request.queryParameters.entries()
+                    .filter { it.key.startsWith("aoi.") }
+                    .associate { it.key.removePrefix("aoi.") to (it.value.firstOrNull() == "true") }
 
-                call.respond(recordService.getAll(page, pageSize, testId, userLogin, userLoginContains, from, to, roiFilter))
+                call.respond(service.getAll(page, pageSize, testId, userLogin, userLoginContains, from, to, aoiFilter))
             }
 
             get("/users/suggest") {
@@ -60,32 +57,37 @@ fun Route.recordRoutes(recordService: RecordService) {
                 val testId = call.request.queryParameters["testId"]?.toIntOrNull()
                 val from = call.request.queryParameters["from"]
                 val to = call.request.queryParameters["to"]
-                val roiFilter = call.request.queryParameters.entries()
-                    .filter { it.key.startsWith("roi.") }
-                    .associate { it.key.removePrefix("roi.") to (it.value.firstOrNull() == "true") }
 
-                call.respond(recordService.suggestUsers(page, pageSize, testId, from, to, roiFilter))
+                call.respond(service.suggestUsers(page, pageSize, testId, from, to))
             }
 
-            get("/roi-sync") {
+            get("/aoi-sync") {
                 val testId = call.request.queryParameters["testId"]?.toIntOrNull()
                     ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("testId is required"))
 
-                val result = recordService.checkRoiSync(testId)
+                val result = service.checkAoiSync(testId)
                     ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse("Test not found"))
 
                 call.respond(HttpStatusCode.OK, result)
             }
 
+            post("/sync-aoi") {
+                val testId = call.request.queryParameters["testId"]?.toIntOrNull()
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("testId is required"))
+
+                when (val result = service.syncAoiMetrics(testId)) {
+                    is RecordResult.Success -> call.respond(HttpStatusCode.NoContent)
+                    is RecordResult.Error -> call.respond(HttpStatusCode.fromValue(result.status), ErrorResponse(result.message))
+                }
+            }
+
             get("/{id}") {
-                val recordId = call.parameters["id"]?.toIntOrNull()
+                val id = call.parameters["id"]?.toIntOrNull()
                     ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid record ID"))
 
-                when (val result = recordService.getById(recordId)) {
-                    is RecordResult.Success -> call.respond(result.response)
-                    is RecordResult.Error -> call.respond(
-                        HttpStatusCode.fromValue(result.status), ErrorResponse(result.message),
-                    )
+                when (val result = service.getById(id)) {
+                    is RecordResult.Success -> call.respond(HttpStatusCode.OK, result.response)
+                    is RecordResult.Error -> call.respond(HttpStatusCode.fromValue(result.status), ErrorResponse(result.message))
                 }
             }
         }

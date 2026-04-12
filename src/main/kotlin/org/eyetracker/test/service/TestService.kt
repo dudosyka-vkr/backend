@@ -7,22 +7,17 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import org.eyetracker.record.dao.RecordDao.RecordItemStatsData
 import org.eyetracker.record.dao.RecordDao
 import org.eyetracker.record.dto.RecordItemMetrics
-import org.eyetracker.record.service.computeRoiMetrics
 import org.eyetracker.test.dao.TestDao
+import org.eyetracker.test.dao.TestEntity
 import org.eyetracker.test.dao.TestPassTokenDao
-import org.eyetracker.test.dao.TestWithImages
-import org.eyetracker.test.dto.MoveImageResponse
-import org.eyetracker.test.dto.RoiStatEntry
-import org.eyetracker.test.dto.RoiStatsResponse
-import org.eyetracker.test.dto.TestImageInfo
-import org.eyetracker.test.dto.TestImageResponse
+import org.eyetracker.test.dto.AoiStatEntry
+import org.eyetracker.test.dto.AoiStatsResponse
 import org.eyetracker.test.dto.TestListResponse
 import org.eyetracker.test.dto.TestPassTokenResponse
 import org.eyetracker.test.dto.TestResponse
-import org.eyetracker.test.dto.UpdateRoisResponse
+import org.eyetracker.test.dto.UpdateAoiResponse
 import java.io.File
 import java.io.InputStream
 
@@ -33,227 +28,114 @@ sealed class TestResult {
     data class Error(val message: String, val status: Int) : TestResult()
 }
 
-sealed class ImageResult {
-    data class Success(val response: TestImageResponse) : ImageResult()
-    data class Error(val message: String, val status: Int) : ImageResult()
-}
-
-sealed class RoiStatsResult {
-    data class Success(val response: RoiStatsResponse) : RoiStatsResult()
-    data class Error(val message: String, val status: Int) : RoiStatsResult()
+sealed class AoiStatsResult {
+    data class Success(val response: AoiStatsResponse) : AoiStatsResult()
+    data class Error(val message: String, val status: Int) : AoiStatsResult()
 }
 
 class TestService(
-    private val testDao: TestDao,
+    private val dao: TestDao,
+    private val tokenDao: TestPassTokenDao,
     private val recordDao: RecordDao,
-    private val testPassTokenDao: TestPassTokenDao,
     private val uploadDir: String,
 ) {
     fun create(
         name: String,
-        coverStream: InputStream,
-        coverExtension: String,
         userId: Int,
+        imageStream: InputStream,
+        imageExtension: String,
     ): TestResult {
-        if (name.isBlank()) {
-            return TestResult.Error("Name is required", 400)
-        }
+        if (name.isBlank()) return TestResult.Error("Name is required", 400)
 
-        val coverFilename = "cover.$coverExtension"
-        val testWithImages = testDao.create(name, coverFilename, userId)
-        val testId = testWithImages.test.id.value
+        val imageFilename = "image.$imageExtension"
+        val entity = dao.create(name, imageFilename, userId)
+        val testId = entity.id.value
 
-        val testDir = File(uploadDir, "tests/$testId")
+        val dir = File(uploadDir, "tests/$testId")
         try {
-            testDir.mkdirs()
-            coverStream.use { input ->
-                File(testDir, coverFilename).outputStream().use { output ->
+            dir.mkdirs()
+            imageStream.use { input ->
+                File(dir, imageFilename).outputStream().use { output ->
                     input.copyTo(output)
                 }
             }
         } catch (e: Exception) {
-            testDir.deleteRecursively()
-            testDao.deleteById(testId)
-            return TestResult.Error("Failed to save files: ${e.message}", 500)
+            dir.deleteRecursively()
+            dao.findById(testId)?.delete()
+            return TestResult.Error("Failed to save image: ${e.message}", 500)
         }
 
-        return TestResult.Success(toResponse(testWithImages))
+        return TestResult.Success(toResponse(entity))
     }
 
     fun updateName(testId: Int, name: String): TestResult {
         if (name.isBlank()) return TestResult.Error("Name is required", 400)
-        val updated = testDao.updateName(testId, name)
+        val updated = dao.updateName(testId, name)
         if (!updated) return TestResult.Error("Test not found", 404)
-        return TestResult.Success(toResponse(testDao.findById(testId)!!))
-    }
-
-    fun updateCover(testId: Int, coverStream: InputStream, coverExtension: String): TestResult {
-        val testWithImages = testDao.findById(testId)
-            ?: return TestResult.Error("Test not found", 404)
-
-        val coverFilename = "cover.$coverExtension"
-        val testDir = File(uploadDir, "tests/$testId")
-        try {
-            testDir.mkdirs()
-            coverStream.use { input ->
-                File(testDir, coverFilename).outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-        } catch (e: Exception) {
-            return TestResult.Error("Failed to save cover: ${e.message}", 500)
-        }
-
-        testDao.updateCover(testId, coverFilename)
-        return TestResult.Success(toResponse(testDao.findById(testId)!!))
-    }
-
-    fun addImage(testId: Int, imageStream: InputStream, imageExtension: String): ImageResult {
-        val testWithImages = testDao.findById(testId)
-            ?: return ImageResult.Error("Test not found", 404)
-
-        val sortOrder = testWithImages.imageFilenames.size
-        val filename = "${sortOrder.toString().padStart(3, '0')}.$imageExtension"
-
-        val image = testDao.addImage(testId, filename)
-            ?: return ImageResult.Error("Test not found", 404)
-
-        val testDir = File(uploadDir, "tests/$testId")
-        try {
-            testDir.mkdirs()
-            imageStream.use { input ->
-                File(testDir, filename).outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-        } catch (e: Exception) {
-            return ImageResult.Error("Failed to save image: ${e.message}", 500)
-        }
-
-        return ImageResult.Success(
-            TestImageResponse(
-                imageId = image.id.value,
-                imageUrl = "/tests/$testId/images/$sortOrder",
-                sortOrder = sortOrder,
-            )
-        )
-    }
-
-    fun reorderImage(imageId: Int, newPosition: Int): MoveImageResponse? {
-        val finalPosition = testDao.reorderImage(imageId, newPosition) ?: return null
-        return MoveImageResponse(imageId = imageId, sortOrder = finalPosition)
-    }
-
-    fun deleteImage(imageId: Int): String? {
-        val data = testDao.deleteImage(imageId) ?: return "Image not found"
-        val file = File(uploadDir, "tests/${data.testId}/${data.filename}")
-        file.delete()
-        return null
-    }
-
-    fun update(
-        testId: Int,
-        name: String,
-        coverStream: InputStream,
-        coverExtension: String,
-        imageStreams: List<Pair<InputStream, String>>,
-    ): TestResult {
-        if (name.isBlank()) {
-            return TestResult.Error("Name is required", 400)
-        }
-
-        testDao.findById(testId)
-            ?: return TestResult.Error("Test not found", 404)
-
-        val coverFilename = "cover.$coverExtension"
-        val imageFilenames = imageStreams.mapIndexed { index, (_, ext) ->
-            "${index.toString().padStart(3, '0')}.$ext"
-        }
-
-        val testDir = File(uploadDir, "tests/$testId")
-        val tempDir = File(uploadDir, "tests/${testId}_tmp")
-
-        try {
-            tempDir.mkdirs()
-            coverStream.use { input ->
-                File(tempDir, coverFilename).outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            imageStreams.forEachIndexed { index, (stream, _) ->
-                val filename = imageFilenames[index]
-                stream.use { input ->
-                    File(tempDir, filename).outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            tempDir.deleteRecursively()
-            return TestResult.Error("Failed to save files: ${e.message}", 500)
-        }
-
-        val updated = testDao.update(testId, name, coverFilename, imageFilenames)
-            ?: run {
-                tempDir.deleteRecursively()
-                return TestResult.Error("Test not found", 404)
-            }
-
-        testDir.deleteRecursively()
-        tempDir.renameTo(testDir)
-
-        return TestResult.Success(toResponse(updated))
-    }
-
-    fun getAll(): TestListResponse {
-        val tests = testDao.findAll()
-        return TestListResponse(tests.map { toResponse(it) })
-    }
-
-    fun getById(testId: Int): TestResult {
-        val testWithImages = testDao.findById(testId)
-            ?: return TestResult.Error("Test not found", 404)
-        return TestResult.Success(toResponse(testWithImages))
+        return TestResult.Success(toResponse(dao.findById(testId)!!))
     }
 
     fun delete(testId: Int): TestResult {
-        val testWithImages = testDao.findById(testId)
-            ?: return TestResult.Error("Test not found", 404)
-
-        val testDir = File(uploadDir, "tests/${testWithImages.test.id.value}")
-        testDao.deleteById(testId)
-        testDir.deleteRecursively()
-
-        return TestResult.Success(toResponse(testWithImages))
+        val entity = dao.findById(testId) ?: return TestResult.Error("Test not found", 404)
+        val response = toResponse(entity)
+        dao.deleteById(testId)
+        File(uploadDir, "tests/$testId").deleteRecursively()
+        return TestResult.Success(response)
     }
 
-    fun updateImageRois(imageId: Int, rois: List<JsonObject>): UpdateRoisResponse? {
-        val roiJson = Json.encodeToString(rois)
-        val updated = testDao.updateImageRoi(imageId, roiJson)
+    fun getById(testId: Int): TestResult {
+        val entity = dao.findById(testId) ?: return TestResult.Error("Test not found", 404)
+        return TestResult.Success(toResponse(entity))
+    }
+
+    fun getAll(nameFilter: String?): TestListResponse {
+        return TestListResponse(dao.findAll(nameFilter).map { toResponse(it) })
+    }
+
+    fun updateAoi(testId: Int, aoi: List<JsonObject>): UpdateAoiResponse? {
+        val updated = dao.updateAoi(testId, Json.encodeToString(aoi))
         if (!updated) return null
-        return UpdateRoisResponse(imageId, rois)
+        return UpdateAoiResponse(testId, aoi)
     }
 
-    fun getRoiStats(testId: Int, requestingUserId: Int): RoiStatsResult {
-        val testWithImages = testDao.findById(testId)
-            ?: return RoiStatsResult.Error("Test not found", 404)
-        if (testWithImages.test.userId != requestingUserId)
-            return RoiStatsResult.Error("Access denied", 403)
+    fun getImageFile(testId: Int): File? {
+        val entity = dao.findById(testId) ?: return null
+        val file = File(uploadDir, "tests/$testId/${entity.image}")
+        return if (file.exists()) file else null
+    }
 
-        val imageRois = testDao.findImageRoisByTestId(testId)
+    fun getOrCreateToken(testId: Int): TestPassTokenResponse? {
+        dao.findById(testId) ?: return null
+        val existing = tokenDao.findByTestId(testId)
+        if (existing != null) return TestPassTokenResponse(code = existing.code, testId = testId)
+        var code: String
+        do {
+            code = (10_000_000..99_999_999).random().toString()
+        } while (tokenDao.findByCode(code) != null)
+        tokenDao.create(testId, code)
+        return TestPassTokenResponse(code = code, testId = testId)
+    }
 
-        // Parse ROI definitions: name -> (color, firstFixationRequired)
-        data class RoiDef(val color: String, val firstFixationRequired: Boolean)
-        val roiDefs = linkedMapOf<String, RoiDef>()
-        for ((_, roiJson) in imageRois) {
-            roiJson ?: continue
+    fun getByToken(code: String): TestResult {
+        val token = tokenDao.findByCode(code) ?: return TestResult.Error("Token not found", 404)
+        val entity = dao.findById(token.testId) ?: return TestResult.Error("Test not found", 404)
+        return TestResult.Success(toResponse(entity))
+    }
+
+    fun getAoiStats(testId: Int, requestingUserId: Int): AoiStatsResult {
+        val entity = dao.findById(testId) ?: return AoiStatsResult.Error("Test not found", 404)
+        if (entity.userId != requestingUserId) return AoiStatsResult.Error("Access denied", 403)
+
+        data class AoiDef(val color: String, val firstFixationRequired: Boolean)
+        val aoiDefs = linkedMapOf<String, AoiDef>()
+        entity.aoi?.let { json ->
             runCatching {
-                Json.parseToJsonElement(roiJson).jsonArray.forEach { el ->
+                Json.parseToJsonElement(json).jsonArray.forEach { el ->
                     val obj = el.jsonObject
                     val name = obj["name"]?.jsonPrimitive?.content ?: return@forEach
-                    roiDefs.putIfAbsent(
+                    aoiDefs.putIfAbsent(
                         name,
-                        RoiDef(
+                        AoiDef(
                             color = obj["color"]?.jsonPrimitive?.content ?: "",
                             firstFixationRequired = obj["first_fixation"]?.jsonPrimitive?.booleanOrNull ?: false,
                         ),
@@ -262,28 +144,26 @@ class TestService(
             }
         }
 
-        val items = recordDao.findItemsWithRecordForTest(testId)
-
-        // Per record: which ROI names were hit
+        val records = recordDao.findAllForTest(testId)
         val hitsByRecord = mutableMapOf<Int, MutableSet<String>>()
         val userByRecord = mutableMapOf<Int, String>()
-        for (item in items) {
-            userByRecord[item.recordId] = item.userLogin
+
+        for (record in records) {
+            userByRecord[record.id.value] = record.userLogin
             val metrics = runCatching {
-                lenientJson.decodeFromString<RecordItemMetrics>(item.metricsJson)
+                lenientJson.decodeFromString<RecordItemMetrics>(record.metricsJson)
             }.getOrDefault(RecordItemMetrics())
             for (roiMetric in metrics.roiMetrics) {
                 val name = roiMetric["name"]?.jsonPrimitive?.content ?: continue
                 val hit = roiMetric["hit"]?.jsonPrimitive?.booleanOrNull ?: false
-                if (hit) hitsByRecord.getOrPut(item.recordId) { mutableSetOf() }.add(name)
+                if (hit) hitsByRecord.getOrPut(record.id.value) { mutableSetOf() }.add(name)
             }
         }
 
         val totalRecords = userByRecord.size
         val uniqueUsers = userByRecord.values.distinct().size
-
-        val rois = roiDefs.map { (name, def) ->
-            RoiStatEntry(
+        val aois = aoiDefs.map { (name, def) ->
+            AoiStatEntry(
                 name = name,
                 color = def.color,
                 hits = hitsByRecord.values.count { name in it },
@@ -292,86 +172,19 @@ class TestService(
             )
         }
 
-        return RoiStatsResult.Success(RoiStatsResponse(rois = rois, totalRecords = totalRecords, uniqueUsers = uniqueUsers))
+        return AoiStatsResult.Success(AoiStatsResponse(aois = aois, totalRecords = totalRecords, uniqueUsers = uniqueUsers))
     }
 
-    fun syncRoiMetrics(testId: Int): TestResult {
-        testDao.findById(testId)
-            ?: return TestResult.Error("Test not found", 404)
-
-        val imageRois = testDao.findImageRoisByTestId(testId)
-        val items = recordDao.findItemsForTest(testId)
-
-        for (item in items) {
-            val roiJson = imageRois[item.imageId]
-            val metrics = try {
-                lenientJson.decodeFromString<RecordItemMetrics>(item.metricsJson)
-            } catch (_: Exception) {
-                RecordItemMetrics()
-            }
-            val newRoiMetrics = computeRoiMetrics(roiJson, metrics.fixations)
-            val updated = metrics.copy(roiMetrics = newRoiMetrics)
-            recordDao.updateItemMetrics(item.itemId, Json.encodeToString(updated))
-        }
-
-        // Return a dummy success; the controller will respond 204
-        return TestResult.Success(
-            TestResponse(testId, "", "", "", emptyList()),
-        )
-    }
-
-    fun getCoverFile(testId: Int): File? {
-        val testWithImages = testDao.findById(testId) ?: return null
-        val file = File(uploadDir, "tests/$testId/${testWithImages.test.coverFilename}")
-        return if (file.exists()) file else null
-    }
-
-    fun getImageFile(testId: Int, imageIndex: Int): File? {
-        val testWithImages = testDao.findById(testId) ?: return null
-        if (imageIndex < 0 || imageIndex >= testWithImages.imageFilenames.size) return null
-        val filename = testWithImages.imageFilenames[imageIndex]
-        val file = File(uploadDir, "tests/$testId/$filename")
-        return if (file.exists()) file else null
-    }
-
-    fun getOrCreateToken(testId: Int): TestPassTokenResponse? {
-        testDao.findById(testId) ?: return null
-        val existing = testPassTokenDao.findByTestId(testId)
-        if (existing != null) return TestPassTokenResponse(code = existing.code, testId = testId)
-        var code: String
-        do {
-            code = (10_000_000..99_999_999).random().toString()
-        } while (testPassTokenDao.findByCode(code) != null)
-        testPassTokenDao.create(testId, code)
-        return TestPassTokenResponse(code = code, testId = testId)
-    }
-
-    fun getTestByToken(code: String): TestResult {
-        val token = testPassTokenDao.findByCode(code)
-            ?: return TestResult.Error("Token not found", 404)
-        val testWithImages = testDao.findById(token.testId)
-            ?: return TestResult.Error("Test not found", 404)
-        return TestResult.Success(toResponse(testWithImages))
-    }
-
-    private fun toResponse(testWithImages: TestWithImages): TestResponse {
-        val testId = testWithImages.test.id.value
-        val images = testWithImages.imageIds.indices.map { i ->
-            TestImageInfo(
-                id = testWithImages.imageIds[i],
-                url = "/tests/$testId/images/$i",
-                sortOrder = testWithImages.sortOrders.getOrElse(i) { i },
-                rois = testWithImages.rois.getOrNull(i)?.let { roiStr ->
-                    runCatching { Json.parseToJsonElement(roiStr).jsonArray.map { el -> el.jsonObject } }.getOrNull()
-                } ?: emptyList(),
-            )
-        }
+    private fun toResponse(entity: TestEntity): TestResponse {
+        val aoi = entity.aoi?.let { json ->
+            runCatching { Json.decodeFromString<List<JsonObject>>(json) }.getOrDefault(emptyList())
+        } ?: emptyList()
         return TestResponse(
-            id = testId,
-            name = testWithImages.test.name,
-            coverUrl = "/tests/$testId/cover",
-            createdAt = testWithImages.test.createdAt.toString(),
-            images = images,
+            id = entity.id.value,
+            name = entity.name,
+            imageUrl = "/tests/${entity.id.value}/image",
+            aoi = aoi,
+            createdAt = entity.createdAt.toString(),
         )
     }
 }

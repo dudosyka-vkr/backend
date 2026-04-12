@@ -1,34 +1,17 @@
 package org.eyetracker.test.dao
 
 import kotlinx.datetime.Clock
-import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.transactions.transaction
 
-data class TestWithImages(
-    val test: TestEntity,
-    val imageFilenames: List<String>,
-    val imageIds: List<Int> = emptyList(),
-    val sortOrders: List<Int> = emptyList(),
-    val rois: List<String?> = emptyList(),
-)
-
-data class ImageDeleteData(val testId: Int, val filename: String)
-
 class TestDao {
-    fun create(
-        name: String,
-        coverFilename: String,
-        userId: Int,
-    ): TestWithImages = transaction {
-        val test = TestEntity.new {
+    fun create(name: String, image: String, userId: Int): TestEntity = transaction {
+        TestEntity.new {
             this.name = name
-            this.coverFilename = coverFilename
+            this.image = image
             this.userId = userId
             this.createdAt = Clock.System.now()
         }
-        TestWithImages(test, emptyList(), emptyList(), emptyList(), emptyList())
     }
 
     fun updateName(testId: Int, name: String): Boolean = transaction {
@@ -37,112 +20,29 @@ class TestDao {
         true
     }
 
-    fun updateCover(testId: Int, coverFilename: String): Boolean = transaction {
+    fun updateAoi(testId: Int, aoi: String): Boolean = transaction {
         val test = TestEntity.findById(testId) ?: return@transaction false
-        test.coverFilename = coverFilename
-        true
-    }
-
-    fun addImage(testId: Int, filename: String): TestImageEntity? = transaction {
-        TestEntity.findById(testId) ?: return@transaction null
-        val sortOrder = TestImageEntity.find { TestImageTable.testId eq testId }.count().toInt()
-        TestImageEntity.new {
-            this.testId = testId
-            this.filename = filename
-            this.sortOrder = sortOrder
-        }
-    }
-
-    fun reorderImage(imageId: Int, newPosition: Int): Int? = transaction {
-        val image = TestImageEntity.findById(imageId) ?: return@transaction null
-        val images = TestImageEntity.find { TestImageTable.testId eq image.testId }
-            .orderBy(TestImageTable.sortOrder to SortOrder.ASC)
-            .toMutableList()
-        images.remove(image)
-        val clamped = newPosition.coerceIn(0, images.size)
-        images.add(clamped, image)
-        images.forEachIndexed { index, img -> img.sortOrder = index }
-        clamped
-    }
-
-    fun deleteImage(imageId: Int): ImageDeleteData? = transaction {
-        val image = TestImageEntity.findById(imageId) ?: return@transaction null
-        val data = ImageDeleteData(image.testId, image.filename)
-        image.delete()
-        data
-    }
-
-    fun findAll(): List<TestWithImages> = transaction {
-        val tests = TestEntity.all().toList()
-        tests.map { test ->
-            val imageEntities = TestImageEntity.find { TestImageTable.testId eq test.id.value }
-                .orderBy(TestImageTable.sortOrder to SortOrder.ASC)
-                .toList()
-            TestWithImages(
-                test,
-                imageEntities.map { it.filename },
-                imageEntities.map { it.id.value },
-                imageEntities.map { it.sortOrder },
-                imageEntities.map { it.roi },
-            )
-        }
-    }
-
-    fun findById(testId: Int): TestWithImages? = transaction {
-        val test = TestEntity.findById(testId) ?: return@transaction null
-        val imageEntities = TestImageEntity.find { TestImageTable.testId eq testId }
-            .orderBy(TestImageTable.sortOrder to SortOrder.ASC)
-            .toList()
-        TestWithImages(
-            test,
-            imageEntities.map { it.filename },
-            imageEntities.map { it.id.value },
-            imageEntities.map { it.sortOrder },
-            imageEntities.map { it.roi },
-        )
-    }
-
-    fun update(
-        testId: Int,
-        name: String,
-        coverFilename: String,
-        imageFilenames: List<String>,
-    ): TestWithImages? = transaction {
-        val test = TestEntity.findById(testId) ?: return@transaction null
-        test.name = name
-        test.coverFilename = coverFilename
-        TestImageTable.deleteWhere { TestImageTable.testId eq testId }
-        val images = imageFilenames.mapIndexed { index, filename ->
-            TestImageEntity.new {
-                this.testId = testId
-                this.filename = filename
-                this.sortOrder = index
-            }
-        }
-        TestWithImages(test, imageFilenames, images.map { it.id.value }, images.map { it.sortOrder }, images.map { it.roi })
-    }
-
-    fun findImageIdsByTestId(testId: Int): List<Int> = transaction {
-        TestImageEntity.find { TestImageTable.testId eq testId }
-            .orderBy(TestImageTable.sortOrder to SortOrder.ASC)
-            .map { it.id.value }
-    }
-
-    fun findImageRoisByTestId(testId: Int): Map<Int, String?> = transaction {
-        TestImageEntity.find { TestImageTable.testId eq testId }
-            .associate { it.id.value to it.roi }
-    }
-
-    fun updateImageRoi(imageId: Int, roi: String): Boolean = transaction {
-        val image = TestImageEntity.findById(imageId) ?: return@transaction false
-        image.roi = roi
+        test.aoi = aoi
         true
     }
 
     fun deleteById(testId: Int): Boolean = transaction {
         val test = TestEntity.findById(testId) ?: return@transaction false
-        TestImageTable.deleteWhere { TestImageTable.testId eq testId }
         test.delete()
         true
+    }
+
+    fun findById(testId: Int): TestEntity? = transaction {
+        TestEntity.findById(testId)
+    }
+
+    fun findAll(nameFilter: String? = null): List<TestEntity> = transaction {
+        if (nameFilter.isNullOrBlank()) {
+            TestEntity.all().toList()
+        } else {
+            TestEntity.find {
+                TestTable.name.lowerCase() like "%${nameFilter.lowercase()}%"
+            }.toList()
+        }
     }
 }

@@ -9,6 +9,7 @@ class RecordEntity(id: EntityID<Int>) : IntEntity(id) {
 
     var testId by RecordTable.testId
     var userLogin by RecordTable.userLogin
+    var metricsJson by RecordTable.metricsJson
     var startedAt by RecordTable.startedAt
     var finishedAt by RecordTable.finishedAt
     var durationMs by RecordTable.durationMs

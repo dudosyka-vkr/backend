@@ -8,7 +8,8 @@ class TestEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<TestEntity>(TestTable)
 
     var name by TestTable.name
-    var coverFilename by TestTable.coverFilename
+    var image by TestTable.image
+    var aoi by TestTable.aoi
     var userId by TestTable.userId
     var createdAt by TestTable.createdAt
 }

@@ -96,9 +96,7 @@ curl -X POST $API_BASE_URL/auth/users \
 curl -X POST $API_BASE_URL/tests \
   -H "Authorization: Bearer <admin_token>" \
   -F "name=My Test" \
-  -F "cover=@cover.png;type=image/png" \
-  -F "images=@image1.jpg;type=image/jpeg" \
-  -F "images=@image2.jpg;type=image/jpeg"
+  -F "image=@stimulus.png;type=image/png"
 ```
 
 Ответ `201`:
@@ -106,55 +104,89 @@ curl -X POST $API_BASE_URL/tests \
 {
   "id": 1,
   "name": "My Test",
-  "coverUrl": "/tests/1/cover",
-  "imageUrls": ["/tests/1/images/0", "/tests/1/images/1"],
-  "imageIds": [1, 2],
-  "rois": [null, null],
+  "imageUrl": "/tests/1/image",
+  "aoi": [],
   "createdAt": "2025-01-15T12:00:00Z"
 }
 ```
 
-### Обновить тест (multipart, ADMIN+)
+### Переименовать тест (ADMIN+)
 
 ```bash
-curl -X PUT $API_BASE_URL/tests/1 \
+curl -X PATCH $API_BASE_URL/tests/1/name \
   -H "Authorization: Bearer <admin_token>" \
-  -F "name=Updated Test" \
-  -F "cover=@new_cover.png;type=image/png" \
-  -F "images=@new_image.jpg;type=image/jpeg"
+  -d "name=Updated+Test"
 ```
 
-Ответ `200`: аналогичен созданию. Ответ `404` если тест не найден.
+Ответ `200`: TestResponse. Ответ `404` если тест не найден.
 
-### Обновить ROI изображения (ADMIN+)
+### Обновить AOI теста (ADMIN+)
 
 ```bash
-curl -X PATCH $API_BASE_URL/tests/images/1/roi \
+curl -X PATCH $API_BASE_URL/tests/1/aoi \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <admin_token>" \
-  -d '{"roi":"{\"x\":10,\"y\":20,\"w\":100,\"h\":50}"}'
+  -d '{
+    "aoi": [
+      {"name":"zone1","color":"#FF0000","first_fixation":false,"points":[{"x":10,"y":20},{"x":110,"y":20},{"x":110,"y":120},{"x":10,"y":120}]},
+      {"name":"zone2","color":"#00FF00","first_fixation":true,"points":[{"x":200,"y":50},{"x":300,"y":50},{"x":300,"y":150},{"x":200,"y":150}]}
+    ]
+  }'
 ```
 
 Ответ `200`:
 ```json
-{"imageId": 1, "roi": "{\"x\":10,\"y\":20,\"w\":100,\"h\":50}"}
+{
+  "testId": 1,
+  "aoi": [
+    {"name":"zone1","color":"#FF0000","first_fixation":false,"points":[...]},
+    {"name":"zone2","color":"#00FF00","first_fixation":true,"points":[...]}
+  ]
+}
 ```
 
-Ответ `404` (изображение не найдено):
-```json
-{"error": "Image not found"}
+Ответ `404` если тест не найден.
+
+### Получить или создать токен прохождения (ADMIN+)
+
+```bash
+curl -X POST $API_BASE_URL/tests/1/token \
+  -H "Authorization: Bearer <admin_token>"
 ```
+
+Ответ `200`:
+```json
+{"code":"12345678","testId":1}
+```
+
+### Получить тест по токену (без авторизации)
+
+```bash
+curl $API_BASE_URL/tests/by-token/12345678
+```
+
+Ответ `200`: TestResponse. Ответ `404` если токен не найден.
 
 ### Список тестов
 
 ```bash
-curl $API_BASE_URL/tests \
+curl "$API_BASE_URL/tests?name=stimulus" \
   -H "Authorization: Bearer <token>"
 ```
 
 Ответ `200`:
 ```json
-{"tests":[{"id":1,"name":"My Test","coverUrl":"/tests/1/cover","imageUrls":["/tests/1/images/0"],"imageIds":[1],"rois":[null],"createdAt":"..."}]}
+{
+  "tests": [
+    {
+      "id": 1,
+      "name": "My Test",
+      "imageUrl": "/tests/1/image",
+      "aoi": [],
+      "createdAt": "2025-01-15T12:00:00Z"
+    }
+  ]
+}
 ```
 
 ### Получить тест по ID
@@ -175,23 +207,39 @@ curl -X DELETE $API_BASE_URL/tests/1 \
 
 Ответ `204` (без тела). Ответ `404` если не найден.
 
-### Скачать обложку / изображение
+### Скачать изображение теста
 
 ```bash
-# Обложка
-curl $API_BASE_URL/tests/1/cover \
-  -H "Authorization: Bearer <token>" -o cover.png
+curl $API_BASE_URL/tests/1/image \
+  -H "Authorization: Bearer <token>" -o image.png
+```
 
-# Изображение по индексу (0-based)
-curl $API_BASE_URL/tests/1/images/0 \
-  -H "Authorization: Bearer <token>" -o image.jpg
+Ответ `200` (бинарные данные). Ответ `404` если изображение не найдено.
+
+### AOI-статистика по тесту (ADMIN+)
+
+```bash
+curl $API_BASE_URL/tests/1/aoi-stats \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+Ответ `200`:
+```json
+{
+  "aois": [
+    {"name":"zone1","color":"#FF0000","hits":5,"total":10,"firstFixationRequired":false},
+    {"name":"zone2","color":"#00FF00","hits":3,"total":10,"firstFixationRequired":true}
+  ],
+  "totalRecords": 10,
+  "uniqueUsers": 7
+}
 ```
 
 ## Прохождения (Records)
 
-Поле `userLogin` в ответах заполняется автоматически из JWT токена (email аутентифицированного пользователя).
+Поле `userLogin` в ответах берётся из JWT токена (для аутентифицированных запросов) или из поля `login` тела запроса (для анонимных по токену).
 
-### Создать прохождение
+### Создать прохождение (аутентифицированный)
 
 ```bash
 curl -X POST $API_BASE_URL/records \
@@ -202,10 +250,10 @@ curl -X POST $API_BASE_URL/records \
     "startedAt": "2025-01-15T10:00:00Z",
     "finishedAt": "2025-01-15T10:05:00Z",
     "durationMs": 300000,
-    "items": [
-      {"imageId": 1, "metrics": {"placeholderMetric": 0.85}},
-      {"imageId": 2, "metrics": {"placeholderMetric": 0.92}}
-    ]
+    "metrics": {
+      "fixations": [],
+      "roiMetrics": []
+    }
   }'
 ```
 
@@ -219,21 +267,46 @@ curl -X POST $API_BASE_URL/records \
   "finishedAt": "2025-01-15T10:05:00Z",
   "durationMs": 300000,
   "createdAt": "2025-01-15T10:05:01Z",
-  "items": [
-    {"id": 1, "imageId": 1, "metrics": {"placeholderMetric": 0.85}},
-    {"id": 2, "imageId": 2, "metrics": {"placeholderMetric": 0.92}}
-  ]
+  "metrics": {
+    "fixations": [],
+    "roiMetrics": []
+  }
 }
 ```
 
 Ответ `400` (невалидные данные):
 ```json
-{"error": "At least one item is required"}
+{"error": "Duration must be non-negative"}
 ```
 
 Ответ `404` (тест не найден):
 ```json
 {"error": "Test not found"}
+```
+
+### Создать прохождение по токену (без авторизации)
+
+```bash
+curl -X POST $API_BASE_URL/records/unauthorized \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "12345678",
+    "login": "participant@example.com",
+    "startedAt": "2025-01-15T10:00:00Z",
+    "finishedAt": "2025-01-15T10:05:00Z",
+    "durationMs": 300000,
+    "metrics": {
+      "fixations": [],
+      "roiMetrics": []
+    }
+  }'
+```
+
+Ответ `201`: аналогичен созданию аутентифицированным пользователем.
+
+Ответ `404` (токен не найден):
+```json
+{"error": "Invalid token"}
 ```
 
 ### Список прохождений (с пагинацией и фильтрами)
@@ -254,13 +327,26 @@ curl "$API_BASE_URL/records?page=1&pageSize=20&testId=1&userLogin=student@exampl
       "startedAt": "2025-01-15T10:00:00Z",
       "finishedAt": "2025-01-15T10:05:00Z",
       "durationMs": 300000,
-      "createdAt": "2025-01-15T10:05:01Z"
+      "createdAt": "2025-01-15T10:05:01Z",
+      "metrics": {"fixations":[],"roiMetrics":[]}
     }
   ],
   "page": 1,
   "pageSize": 20,
   "total": 1
 }
+```
+
+### Фильтрация по AOI
+
+```bash
+# Только прохождения, где zone1 была зафиксирована (hit=true)
+curl "$API_BASE_URL/records?testId=1&aoi.zone1=true" \
+  -H "Authorization: Bearer <token>"
+
+# Прохождения, где zone1 зафиксирована, а zone2 — нет
+curl "$API_BASE_URL/records?testId=1&aoi.zone1=true&aoi.zone2=false" \
+  -H "Authorization: Bearer <token>"
 ```
 
 ### Список уникальных участников (suggest)
@@ -287,24 +373,40 @@ curl $API_BASE_URL/records/1 \
   -H "Authorization: Bearer <token>"
 ```
 
+Ответ `200`: RecordResponse (см. выше). Ответ `404`:
+```json
+{"error": "Record not found"}
+```
+
+### Проверить синхронизацию AOI-метрик
+
+```bash
+curl "$API_BASE_URL/records/aoi-sync?testId=1" \
+  -H "Authorization: Bearer <token>"
+```
+
 Ответ `200`:
 ```json
 {
-  "id": 1,
-  "testId": 1,
-  "userLogin": "student@example.com",
-  "startedAt": "2025-01-15T10:00:00Z",
-  "finishedAt": "2025-01-15T10:05:00Z",
-  "durationMs": 300000,
-  "createdAt": "2025-01-15T10:05:01Z",
-  "items": [
-    {"id": 1, "imageId": 1, "metrics": {"placeholderMetric": 0.85}},
-    {"id": 2, "imageId": 2, "metrics": {"placeholderMetric": 0.92}}
-  ]
+  "synced": false,
+  "totalRecords": 10,
+  "outOfSyncCount": 3
 }
 ```
 
-Ответ `404`:
+Ответ `404` (тест не найден):
 ```json
-{"error": "Record not found"}
+{"error": "Test not found"}
+```
+
+### Пересчитать AOI-метрики
+
+```bash
+curl -X POST "$API_BASE_URL/records/sync-aoi?testId=1" \
+  -H "Authorization: Bearer <token>"
+```
+
+Ответ `204` (без тела). Ответ `404` (тест не найден):
+```json
+{"error": "Test not found"}
 ```

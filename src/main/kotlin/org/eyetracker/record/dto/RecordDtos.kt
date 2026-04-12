@@ -13,6 +13,8 @@ data class RecordItemMetrics(
     val firstFixationTimeMs: Int? = null,
     val saccades: List<JsonObject> = emptyList(),
     val roiMetrics: List<JsonObject> = emptyList(),
+    val aoiSequence: List<String?> = emptyList(),
+    val tge: Double? = null,
 )
 
 @Serializable

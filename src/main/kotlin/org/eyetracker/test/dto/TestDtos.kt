@@ -19,12 +19,16 @@ data class TestPassTokenResponse(
 )
 
 @Serializable
+data class HistogramBin(val binStartMs: Int, val count: Int)
+
+@Serializable
 data class AoiStatEntry(
     val name: String,
     val color: String,
     val hits: Int,
     val total: Int,
     val firstFixationRequired: Boolean,
+    val firstFixationHistogram: List<HistogramBin>,
 )
 
 @Serializable

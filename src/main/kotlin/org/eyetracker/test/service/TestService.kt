@@ -7,6 +7,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import org.eyetracker.record.dao.RecordDao
 import org.eyetracker.record.dto.RecordItemMetrics
 import org.eyetracker.test.dao.TestDao
@@ -14,6 +15,7 @@ import org.eyetracker.test.dao.TestEntity
 import org.eyetracker.test.dao.TestPassTokenDao
 import org.eyetracker.test.dto.AoiStatEntry
 import org.eyetracker.test.dto.AoiStatsResponse
+import org.eyetracker.test.dto.HistogramBin
 import org.eyetracker.test.dto.TestListResponse
 import org.eyetracker.test.dto.TestPassTokenResponse
 import org.eyetracker.test.dto.TestResponse
@@ -147,6 +149,7 @@ class TestService(
         val records = recordDao.findAllForTest(testId)
         val hitsByRecord = mutableMapOf<Int, MutableSet<String>>()
         val userByRecord = mutableMapOf<Int, String>()
+        val firstFixationMsByAoi = mutableMapOf<String, MutableList<Long>>()
 
         for (record in records) {
             userByRecord[record.id.value] = record.userLogin
@@ -157,6 +160,8 @@ class TestService(
                 val name = roiMetric["name"]?.jsonPrimitive?.content ?: continue
                 val hit = roiMetric["hit"]?.jsonPrimitive?.booleanOrNull ?: false
                 if (hit) hitsByRecord.getOrPut(record.id.value) { mutableSetOf() }.add(name)
+                val firstFixMs = roiMetric["aoi_first_fixation"]?.jsonPrimitive?.longOrNull
+                if (firstFixMs != null) firstFixationMsByAoi.getOrPut(name) { mutableListOf() }.add(firstFixMs)
             }
         }
 
@@ -169,10 +174,19 @@ class TestService(
                 hits = hitsByRecord.values.count { name in it },
                 total = totalRecords,
                 firstFixationRequired = def.firstFixationRequired,
+                firstFixationHistogram = buildHistogram(firstFixationMsByAoi[name] ?: emptyList()),
             )
         }
 
         return AoiStatsResult.Success(AoiStatsResponse(aois = aois, totalRecords = totalRecords, uniqueUsers = uniqueUsers))
+    }
+
+    private fun buildHistogram(valuesMs: List<Long>, binSizeMs: Int = 500): List<HistogramBin> {
+        if (valuesMs.isEmpty()) return emptyList()
+        val numBins = (valuesMs.max() / binSizeMs + 1).toInt()
+        val counts = IntArray(numBins)
+        for (v in valuesMs) counts[(v / binSizeMs).toInt()]++
+        return counts.indices.map { i -> HistogramBin(binStartMs = i * binSizeMs, count = counts[i]) }
     }
 
     private fun toResponse(entity: TestEntity): TestResponse {

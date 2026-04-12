@@ -120,8 +120,12 @@ class RecordService(
             val metrics = runCatching {
                 lenientJson.decodeFromString<RecordItemMetrics>(record.metricsJson)
             }.getOrDefault(RecordItemMetrics())
-            val newRoiMetrics = computeRoiMetrics(test.aoi, metrics.fixations)
-            val updated = metrics.copy(roiMetrics = newRoiMetrics)
+            val result = computeRoiMetrics(test.aoi, metrics.fixations)
+            val updated = metrics.copy(
+                roiMetrics = result.roiMetrics,
+                aoiSequence = result.aoiSequence,
+                tge = computeTge(result.aoiSequence),
+            )
             dao.updateMetrics(record.id.value, Json.encodeToString(updated))
         }
         return RecordResult.Success(RecordResponse(0, testId, "", "", "", 0, "", RecordItemMetrics()))

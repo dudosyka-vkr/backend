@@ -152,14 +152,14 @@ fun Route.testRoutes(service: TestService) {
 
             get {
                 val nameFilter = call.request.queryParameters["name"]
-                call.respond(service.getAll(nameFilter))
+                call.respond(service.getAll(call.userId(), nameFilter))
             }
 
             get("/{id}") {
                 val testId = call.parameters["id"]?.toIntOrNull()
                     ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid test ID"))
 
-                when (val result = service.getById(testId)) {
+                when (val result = service.getById(testId, call.userId())) {
                     is TestResult.Success -> call.respond(HttpStatusCode.OK, result.response)
                     is TestResult.Error -> call.respond(HttpStatusCode.fromValue(result.status), ErrorResponse(result.message))
                 }

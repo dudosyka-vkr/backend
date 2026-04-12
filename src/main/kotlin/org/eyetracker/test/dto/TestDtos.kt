@@ -22,6 +22,9 @@ data class TestPassTokenResponse(
 data class HistogramBin(val binStartMs: Int, val count: Int)
 
 @Serializable
+data class TgeHistogramBin(val binStart: Double, val count: Int)
+
+@Serializable
 data class AoiStatEntry(
     val name: String,
     val color: String,
@@ -36,6 +39,7 @@ data class AoiStatsResponse(
     val aois: List<AoiStatEntry>,
     val totalRecords: Int,
     val uniqueUsers: Int,
+    val tgeHistogram: List<TgeHistogramBin>,
 )
 
 @Serializable

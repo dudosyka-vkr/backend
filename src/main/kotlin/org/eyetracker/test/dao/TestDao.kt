@@ -1,6 +1,8 @@
 package org.eyetracker.test.dao
 
 import kotlinx.datetime.Clock
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.transactions.transaction
 
@@ -36,12 +38,12 @@ class TestDao {
         TestEntity.findById(testId)
     }
 
-    fun findAll(nameFilter: String? = null): List<TestEntity> = transaction {
+    fun findAll(userId: Int, nameFilter: String? = null): List<TestEntity> = transaction {
         if (nameFilter.isNullOrBlank()) {
-            TestEntity.all().toList()
+            TestEntity.find { TestTable.userId eq userId }.toList()
         } else {
             TestEntity.find {
-                TestTable.name.lowerCase() like "%${nameFilter.lowercase()}%"
+                (TestTable.userId eq userId) and (TestTable.name.lowerCase() like "%${nameFilter.lowercase()}%")
             }.toList()
         }
     }

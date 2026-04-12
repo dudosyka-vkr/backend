@@ -16,6 +16,7 @@ import org.eyetracker.test.dao.TestPassTokenDao
 import org.eyetracker.test.dto.AoiStatEntry
 import org.eyetracker.test.dto.AoiStatsResponse
 import org.eyetracker.test.dto.HistogramBin
+import org.eyetracker.test.dto.TgeHistogramBin
 import org.eyetracker.test.dto.TestListResponse
 import org.eyetracker.test.dto.TestPassTokenResponse
 import org.eyetracker.test.dto.TestResponse
@@ -85,13 +86,14 @@ class TestService(
         return TestResult.Success(response)
     }
 
-    fun getById(testId: Int): TestResult {
+    fun getById(testId: Int, requestingUserId: Int): TestResult {
         val entity = dao.findById(testId) ?: return TestResult.Error("Test not found", 404)
+        if (entity.userId != requestingUserId) return TestResult.Error("Access denied", 403)
         return TestResult.Success(toResponse(entity))
     }
 
-    fun getAll(nameFilter: String?): TestListResponse {
-        return TestListResponse(dao.findAll(nameFilter).map { toResponse(it) })
+    fun getAll(userId: Int, nameFilter: String?): TestListResponse {
+        return TestListResponse(dao.findAll(userId, nameFilter).map { toResponse(it) })
     }
 
     fun updateAoi(testId: Int, aoi: List<JsonObject>): UpdateAoiResponse? {
@@ -150,12 +152,14 @@ class TestService(
         val hitsByRecord = mutableMapOf<Int, MutableSet<String>>()
         val userByRecord = mutableMapOf<Int, String>()
         val firstFixationMsByAoi = mutableMapOf<String, MutableList<Long>>()
+        val tgeValues = mutableListOf<Double>()
 
         for (record in records) {
             userByRecord[record.id.value] = record.userLogin
             val metrics = runCatching {
                 lenientJson.decodeFromString<RecordItemMetrics>(record.metricsJson)
             }.getOrDefault(RecordItemMetrics())
+            metrics.tge?.let { tgeValues.add(it) }
             for (roiMetric in metrics.roiMetrics) {
                 val name = roiMetric["name"]?.jsonPrimitive?.content ?: continue
                 val hit = roiMetric["hit"]?.jsonPrimitive?.booleanOrNull ?: false
@@ -178,7 +182,15 @@ class TestService(
             )
         }
 
-        return AoiStatsResult.Success(AoiStatsResponse(aois = aois, totalRecords = totalRecords, uniqueUsers = uniqueUsers))
+        return AoiStatsResult.Success(AoiStatsResponse(aois = aois, totalRecords = totalRecords, uniqueUsers = uniqueUsers, tgeHistogram = buildTgeHistogram(tgeValues)))
+    }
+
+    private fun buildTgeHistogram(values: List<Double>, binSize: Double = 0.1): List<TgeHistogramBin> {
+        if (values.isEmpty()) return emptyList()
+        val numBins = (values.max() / binSize).toInt() + 1
+        val counts = IntArray(numBins)
+        for (v in values) counts[(v / binSize).toInt()]++
+        return counts.indices.map { i -> TgeHistogramBin(binStart = Math.round(i * binSize * 10) / 10.0, count = counts[i]) }
     }
 
     private fun buildHistogram(valuesMs: List<Long>, binSizeMs: Int = 500): List<HistogramBin> {
